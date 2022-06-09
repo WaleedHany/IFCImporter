@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Document</title>
+</head>
+
+
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="image-button">
+        <label for="file-input">
+          <img src="../static/Images/Upload.png" alt="upload a file"/>
+        </label>
+        <input type="file" name="load" id="file-input" accept=".ifc,.IFC" />
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="model-location">
+          <img src="../static/Images/Location.png" alt="specify model location"/>
+        </label>
+        <input type="button" id="model-location"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="move-button">
+          <img src="../static/Images/icon-move-25.jpg" style="background-color: #fefefe;" alt="move element"/>
+        </label>
+        <input type="button" id="move-button"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="copy-button">
+          <img src="../static/Images/CopyIcon.jpg" alt="copy elememt"/>
+        </label>
+        <input type="button" id="copy-button"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="rotate-button">
+          <img src="../static/Images/Rotate.png" alt="reotate element"/>
+        </label>
+        <input type="button" id="rotate-button"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Points-dimentions">
+          <img src="../static/Images/pointToPoinDim.png" alt="point to point dimentions" style="background-color: white;"/>
+        </label>
+        <input type="button" id="Points-dimentions"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Line-Point-dimentions">
+          <img src="../static/Images/dimLine.png" alt="point to point dimentions" style="background-color: white;"/>
+        </label>
+        <input type="button" id="Line-Point-dimentions"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Line-dimentions">
+          <img src="../static/Images/dimLine.png" alt="point to point dimentions" style="background-color: white;"/>
+        </label>
+        <input type="button" id="Line-dimentions"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Point-Coordinates">
+          <img src="../static/Images/Location.png" alt="point to point dimentions" style="background-color: rgb(118, 118, 118);"/>
+        </label>
+        <input type="button" id="Point-Coordinates"></input>
+      </div>
+    </div>
+
+  </div>
+
+  <div title="Model location">
+
+    <dialog id="location-dialog-form" style="width:50%;background-color:#fefefe;
+          border:2px solid rgb(100, 100, 100); vertical-align: middle; width: 170px; 
+          padding: 4px; border-radius: 3px; margin: 5px;">
+      <p id="dialog-form-title"
+        style="font-weight: bold; margin: 5px 0px; font-family:'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;">
+        Model location</p>
+      <fieldset style="padding: 8px; border-radius: 3px;">
+        <legend>attributes window</legend>
+        <label for="x">x</label>
+        <input type="number" name="x" id="positionX" value="0" class="text"
+          style="margin:2px; border-radius: 4px; width: 120px; padding: 2px; border:1px solid #999;"><br />
+        <label for="y">y</label>
+        <input type="number" name="y" id="positionY" value="0" class="text"
+          style="margin:2px; border-radius: 4px; width: 120px; padding: 2px; border:1px solid #999;"><br />
+        <label for="z">z</label>
+        <input type="number" name="z" id="positionZ" value="0" class="text"
+          style="margin:2px; border-radius: 4px; width: 120px; padding: 2px; border:1px solid #999;"><br />
+      </fieldset>
+      <button id="Ok"
+        style="margin: 5px; background-color: #cccccc; padding: 2px; width: 35px; border-radius: 4px;">Ok</button>
+    </dialog>
+  </div>
+
+  <div title="Element rotation">
+    <dialog id="rotation-dialog-form" style="width:50%;background-color:#fefefe;
+        border:2px solid rgb(100, 100, 100); vertical-align: middle; width: 170px; 
+        padding: 4px; border-radius: 3px; margin: 5px;">
+      <p id="rotation-dialog-form-title"
+        style="font-weight: bold; margin: 5px 0px; font-family:'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;">
+        Model location</p>
+      <fieldset style="padding: 8px; border-radius: 3px;">
+        <legend>attributes window</legend>
+        <label for="z">z</label>
+        <input type="number" name="z" id="rotationZ" value="0" class="text"
+          style="margin:2px; border-radius: 4px; width: 120px; padding: 2px; border:1px solid #999;"><br />
+      </fieldset>
+      <button id="Ok-rotation"
+        style="margin: 5px; background-color: #cccccc; padding: 2px; width: 35px; border-radius: 4px;">Ok</button>
+    </dialog>
+  </div>
+
+  <canvas id="canvas" class="webgl" style="background-color: linear-gradient(180deg, red, yellow)"> </canvas>
+
+  <script type="Module" src="bundle.js"></script>
+</body>
+
+</html>

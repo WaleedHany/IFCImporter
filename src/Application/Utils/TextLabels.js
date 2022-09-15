@@ -3,7 +3,7 @@ let DESCENDER_ADJUST = 1; // Constant relating to text boarder box height for la
 
 
 const highLightMaterial = new THREE.SpriteMaterial({
-    map: new THREE.TextureLoader().load('./Resources/highlight.png'),
+    map: new THREE.TextureLoader().load('Application/Utils/Resources/highlight.png'),
     depthTest: false,
     color: "#ff0000"
 });

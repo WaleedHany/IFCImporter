@@ -112948,7 +112948,7 @@ let DESCENDER_ADJUST = 1; // Constant relating to text boarder box height for la
 
 
 const highLightMaterial = new SpriteMaterial({
-    map: new TextureLoader().load('../../../static/Images/highlight.png'),
+    map: new TextureLoader().load('Application/Utils/Resources/highlight.png'),
     depthTest: false,
     color: "#ff0000"
 });
@@ -113303,7 +113303,7 @@ class PointCoordinatesCommand extends Command
         this.scene = scene;
         this.point = point;
         this.coordinatesString = 
-            `x = ${this.point.x.toFixed(3)}\ny = ${this.point.y.toFixed(3)}\nz = ${this.point.z.toFixed(3)}`;
+            `z = ${this.point.z.toFixed(3)}\ny = ${this.point.y.toFixed(3)}\nx = ${this.point.x.toFixed(3)}`;
         this.textPosition = point.clone().add(new Vector3(0, 0, 0.5));
         this.text = TextLabels.makeTextSprite(this.coordinatesString, this.textPosition.x, this.textPosition.y, this.textPosition.z,
                                   { fontsize: 120, fontface: "Georgia", 

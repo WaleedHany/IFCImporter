@@ -107,7 +107,8 @@ export default class Initialization
         this.axes.renderOrder = 1;
         this.scene.add(this.axes);
 
-        
+        this.HasHiddenElements = false
+        this.HiddenElements = []
 
         THREE.Object3D.prototype.rotateAroundWorldAxis = function() {
             // rotate object around axis in world space (the axis passes through point)

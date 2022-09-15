@@ -112359,7 +112359,8 @@ class Initialization
         this.axes.renderOrder = 1;
         this.scene.add(this.axes);
 
-        
+        this.HasHiddenElements = false;
+        this.HiddenElements = [];
 
         Object3D.prototype.rotateAroundWorldAxis = function() {
             // rotate object around axis in world space (the axis passes through point)
@@ -113464,6 +113465,34 @@ class RotateElementCommand extends Command
     }
 }
 
+class Hide_ShowElementCommand
+{
+    static Apply(selectedElements, scene, application, hide = true)
+    {
+      if (application.hasOwnProperty('HiddenElements'))
+      {
+        if (hide)
+        {
+          for(const element of selectedElements)
+          {
+              element.reset();
+            scene.remove(element.mesh);
+            application.HiddenElements.push(element);
+          }
+        }   
+        else
+        {
+          for(const element of  application.HiddenElements)
+          {
+            scene.add(element.mesh);
+          }
+          application.HiddenElements = [];
+        }
+      }
+     
+    }
+}
+
 /**
  * Program Initialization
  */
@@ -113783,6 +113812,21 @@ function Delete()
   // Delete element, call delete command
   init.commands.executeCommand(new DeleteCommand(selectedElements, init.scene, init.importedModels));
 }
+
+/**
+  * Hide/Show
+  */
+ document.getElementById("hide-button").onclick=function(){Hide();};
+ function Hide()
+ {
+   let selectedElements = [...init.SelectedObjects.selectedObjectsList];
+   if (!init.HasHiddenElements) init.HasHiddenElements = true;
+   else init.HasHiddenElements = false;
+   // unselect all selected elements
+   init.unSelect();
+   // Delete element, call delete command
+   Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.HasHiddenElements);
+ }
 
 //#endregion
 

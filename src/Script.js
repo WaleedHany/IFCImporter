@@ -8,6 +8,7 @@ import PointCoordinatesCommand from './Application/Commands/PointCoordinatesComm
 import * as THREE from 'three'
 import DeleteCommand from './Application/Commands/DeleteCommand.js'
 import RotateElementCommand from './Application/Commands/RotateElementsCommand.js'
+import Hide_ShowElementCommand from './Application/Commands/HideElementCommand.js'
 
 /**
  * Program Initialization
@@ -328,6 +329,21 @@ function Delete()
   // Delete element, call delete command
   init.commands.executeCommand(new DeleteCommand(selectedElements, init.scene, init.importedModels))
 }
+
+/**
+  * Hide/Show
+  */
+ document.getElementById("hide-button").onclick=function(){Hide()};
+ function Hide()
+ {
+   let selectedElements = [...init.SelectedObjects.selectedObjectsList]
+   if (!init.HasHiddenElements) init.HasHiddenElements = true
+   else init.HasHiddenElements = false
+   // unselect all selected elements
+   init.unSelect()
+   // Delete element, call delete command
+   Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.HasHiddenElements)
+ }
 
 //#endregion
 

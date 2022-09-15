@@ -319,6 +319,7 @@ function Redo()
  /**
   * Delete
   */
+  document.getElementById("delete-button").onclick=function(){Delete()};
 function Delete()
 {
   let selectedElements = [...init.SelectedObjects.selectedObjectsList]

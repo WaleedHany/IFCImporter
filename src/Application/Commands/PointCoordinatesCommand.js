@@ -16,7 +16,7 @@ export default class PointCoordinatesCommand extends Command
         this.scene = scene
         this.point = point
         this.coordinatesString = 
-            `x = ${this.point.x.toFixed(3)}\ny = ${this.point.y.toFixed(3)}\nz = ${this.point.z.toFixed(3)}`
+            `z = ${this.point.z.toFixed(3)}\ny = ${this.point.y.toFixed(3)}\nx = ${this.point.x.toFixed(3)}`
         this.textPosition = point.clone().add(new THREE.Vector3(0, 0, 0.5))
         this.text = TextLabels.makeTextSprite(this.coordinatesString, this.textPosition.x, this.textPosition.y, this.textPosition.z,
                                   { fontsize: 120, fontface: "Georgia", 

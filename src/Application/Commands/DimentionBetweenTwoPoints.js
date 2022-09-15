@@ -3,11 +3,7 @@ import Command from "./Command.js"
 import TextLabels from '../Utils/TextLabels.js'
 
 let DESCENDER_ADJUST = 1; 
-/**
- * Load IFC file.
- * Convert and store IFC.js output geometry to a new three.js geometry.
- * Store IFC data for each object.
- */
+
 export default class DimentionBetweenTwoPoints extends Command
 {
     constructor(startPoint, endPoint, scene) 
@@ -22,6 +18,7 @@ export default class DimentionBetweenTwoPoints extends Command
         this.Line = new THREE.Line( this.lineGeom, this.linematerial )
         this.Line.material.depthTest = false
         this.Line.name = 'TwoPointsDimentionLine'
+        this.Line.canNotBeRayCasted = false
         this.distance = this.startPoint.distanceTo(this.endPoint)
         this.distanceString = this.distance.toFixed(3) + " [m]"
         this.textPosition = this.#GetTextPosition(this.startPoint, this.endPoint)
@@ -29,6 +26,7 @@ export default class DimentionBetweenTwoPoints extends Command
                                   { fontsize: 120, fontface: "Georgia", textColor: { r: 117, g: 10, b: 201, a: 1.0 },
                                    vAlign: "center", hAlign: "center" });
         this.text.material.depthTest = false
+        this.text.canNotBeRayCasted = false
     }
 
     execute()

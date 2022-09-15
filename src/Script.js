@@ -168,7 +168,6 @@ function CopyElementDialog()
      
      init.rayCaster.on('TwoPointsSelected', ()=>
      {
-       console.log(init.rayCaster.pointsList[0])
        init.commands.executeCommand(new DimentionBetweenTwoPoints(init.rayCaster.pointsList[0], init.rayCaster.pointsList[1], init.scene))
        init.rayCaster.Disable()
        init.selection.Enable()

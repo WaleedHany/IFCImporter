@@ -8,7 +8,7 @@
     "watch": "rollup -w -c ./rollup.config.js",
     "docs": "npx jsdoc -d public -r -R ./README.md ./src/Application/"
   },
-  "author": "",
+  "author": "Waleed Hany",
   "license": "ISC",
   "dependencies": {
     "camera-controls": "^1.34.5",

@@ -1,4 +1,6 @@
-import { Raycaster, Vector2, Vector3, Mesh, MeshBasicMaterial, Triangle, PerspectiveCamera, RingGeometry, BufferGeometry, Line, LineBasicMaterial} from "three";
+import { Raycaster, Vector2, Vector3, Mesh, MeshBasicMaterial, 
+         Triangle, PerspectiveCamera, RingGeometry, EdgesGeometry, 
+         BufferGeometry, Line, LineBasicMaterial} from "three";
 import EventEmitter from "./EventEmitter";
 
 const tempMouse = new Vector2()
@@ -7,7 +9,7 @@ let instance = null
 
 export default class RayCasting extends EventEmitter
 {  
-    constructor(camera, scene, renderer, importedIfcObjects)
+    constructor(camera, scene, renderer, importedIfcObjects, ifcLoader)
     {
         // instansiate base class
         super()
@@ -19,6 +21,8 @@ export default class RayCasting extends EventEmitter
 
         this.camera = camera.instance
         this.scene = scene
+
+        this.ifcLoader = ifcLoader
         
         this.importedObjects = importedIfcObjects
         this.renderer = renderer.instance
@@ -45,6 +49,7 @@ export default class RayCasting extends EventEmitter
         this.Line = new Line( lineGeom, this.LineMaterial )
         this.Line.name = 'EdgeLineHighlight'
         this.LinePoints = []
+
     }
 
     /**
@@ -67,14 +72,16 @@ export default class RayCasting extends EventEmitter
         this.#UpdateMousePosition(event) 
         this.raycaster.setFromCamera(this.mouse, this.camera);
         // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canBeRayCasted'))
+        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'))
         const intersection = this.raycaster.intersectObjects(allowedIntersections)[0];
-        if(intersection != null && intersection.object.hasOwnProperty('modelObject'))
-        {
+        if(intersection != null ) // && intersection.object.hasOwnProperty('modelObject')
+        { 
+            let point;
             intersection.object.worldToLocal(intersection.point);
-            let point = this.#setPos(intersection, intersection.point);
+            point = this.#setPos(intersection, intersection.point);
             intersection.object.localToWorld(point);
             intersection.object.localToWorld(intersection.point);
+           
             if(point != null && intersection.point.distanceTo(point) < 0.3 && !this.selectLine)
             {
                this.marker.position.set(point.x, point.y, point.z)
@@ -96,33 +103,118 @@ export default class RayCasting extends EventEmitter
             {
                this.scene.remove(this.marker)
             }
-            intersection.object.worldToLocal(intersection.point);
-            let edge = this.#setEdge(intersection, point) 
-            if ( edge != null && edge.length == 3 && this.selectLine)
+            if(this.selectLine)
             {
-                intersection.object.localToWorld(edge[0])
-                intersection.object.localToWorld(edge[1])
-                intersection.object.localToWorld(edge[2])
-                intersection.object.localToWorld(intersection.point)
-                this.#HighLightEdges(intersection, edge)
+                this.#RayCastAllEdges(intersection, false)    
+                this.#RayCastOuterEdgesForSeparateMeshes(intersection) //, false) 
+                this.#RayCastOuterEdgesForIfcModel(intersection, false)
             }
-            else
-            {
-               // this.#RemoveLineFromScene()
-            }
-        } 
+         } 
+         else
+         {
+             this.scene.remove(this.marker)
+             this.#RemoveLineFromScene()
+         }
+    }
+
+    #RayCastAllEdges(intersection, enable = true)
+    {
+        let obj = intersection.object
+
+        if(!enable) return
+        obj.worldToLocal(intersection.point);
+        let edge = this.#setEdge(intersection, intersection.point) 
+        if ( edge != null && edge.length == 3)
+        {
+            obj.localToWorld(edge[0])
+            obj.localToWorld(edge[1])
+            obj.localToWorld(edge[2])
+            obj.localToWorld(intersection.point)
+            this.#HighLightEdges(intersection, edge)
+        }
         else
         {
-            this.scene.remove(this.marker)
-            this.#RemoveLineFromScene()
+          this.#RemoveLineFromScene()
         }
     }
 
+    #RayCastOuterEdgesForSeparateMeshes(intersection, enable = true)
+    {
+        if(!enable) return
+        const edges = new EdgesGeometry( intersection.object.geometry );
+        this.#GetOuterEdgesFromObject(edges, intersection)
+    }
+
+    #RayCastOuterEdgesForIfcModel(intersection, enable = true)
+    {
+        if(!enable) return
+        let edges;
+        const index = intersection.faceIndex;
+        const objectGeometry = intersection.object.geometry;
+        const id = this.ifcLoader.ifcManager.getExpressId(objectGeometry, index);
+        if(this.prevIntersectionId == id && this.pervSubSetEdges != null)
+        {
+            edges = this.pervSubSetEdges
+            console.log('here')
+        }
+        else
+        {
+            console.log('there')
+            const obj = this.ifcLoader.ifcManager.createSubset({
+                modelID: intersection.object.modelID,
+                ids: [id],
+                scene: this.scene,
+                removePrevious: true 
+            }) 
+            edges = new EdgesGeometry( obj.geometry );
+        } 
+        this.modelID = intersection.object.modelID
+        this.prevIntersectionId = id
+        this.pervSubSetEdges = edges
+        this.ifcLoader.ifcManager.removeSubset(intersection.object.modelID);
+        this.#GetOuterEdgesFromObject(edges, intersection)
+    }
+
+    #GetOuterEdgesFromObject(edges, intersection)
+    {
+        let points = edges.attributes.position.array
+        let vectors = []
+         for(let i = 0; i < points.length -6; i+=6)
+         {
+            points[i + 0] += intersection.object.position.x
+            points[i + 3] += intersection.object.position.x
+            points[i + 1] += intersection.object.position.y
+            points[i + 4] += intersection.object.position.y
+            points[i + 2] += intersection.object.position.z
+            points[i + 5] += intersection.object.position.z
+            let p1 = new Vector3(points[i], points[i+1], points[i+2])
+            let p2 = new Vector3(points[i+3], points[i+4], points[i+5])
+            vectors.push([p1,p2])
+         }
+         vectors.sort((a, b) => 
+         ( this.#calculateDistanceBetweenLineAndPoint(intersection.point, a[0], a[1]) 
+         > this.#calculateDistanceBetweenLineAndPoint(intersection.point, b[0], b[1])) ? 1 : -1)
+         if ( vectors[0] != null && this.selectLine && this.#calculateDistanceBetweenLineAndPoint(intersection.point, vectors[0][0], vectors[0][1]) < 0.8)
+         {
+            this.#RemoveLineFromScene()
+            const geometry = new BufferGeometry().setFromPoints( vectors[0] )
+            this.Line = new Line( geometry, this.LineMaterial )
+            this.Line.name = 'EdgeLineHighlight'
+            this.Line.depthTest = false
+            this.scene.add(this.Line)
+        }   
+        else
+        {
+            this.#RemoveLineFromScene()
+        } 
+    }
+
+
     #setPos(intersection, point) 
     {
-        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 0);
-        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 1);
-        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 2);
+        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.a) //intersection.faceIndex * 3 + 0);
+        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.b) //intersection.faceIndex * 3 + 1);
+        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.c) //intersection.faceIndex * 3 + 2);
         let bc = new Vector3();
         this.triangle.set(this.HighlightedPoint.a, this.HighlightedPoint.b, this.HighlightedPoint.c);
         this.triangle.getBarycoord(point, bc);
@@ -169,6 +261,7 @@ export default class RayCasting extends EventEmitter
             this.#RemoveLineFromScene()
             const geometry = new BufferGeometry().setFromPoints( obj.points )
             this.Line = new Line( geometry, this.LineMaterial )
+            this.Line.name = 'EdgeLineHighlight'
             this.Line.depthTest = false
             this.scene.add(this.Line)
         }   
@@ -180,9 +273,9 @@ export default class RayCasting extends EventEmitter
 
     #setEdge(intersection, point) 
     {
-        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 0);
-        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 1);
-        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 2);
+        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.a);
+        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.b);
+        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.c);
         let bc = new Vector3();
         this.triangle.set(this.HighlightedPoint.a, this.HighlightedPoint.b, this.HighlightedPoint.c);
         this.triangle.getBarycoord(point, bc);
@@ -192,29 +285,6 @@ export default class RayCasting extends EventEmitter
         // {
         //     return null
         // }     
-    }
-
-    #GetEdgePoints(bc)
-    {
-        if (bc.x > bc.y && bc.x > bc.z)
-        {
-            console.log('a')
-          if ( bc.y > bc.z) return [this.HighlightedPoint.a, this.HighlightedPoint.b]
-          else return [this.HighlightedPoint.a, this.HighlightedPoint.c]
-        } 
-        else if (bc.y > bc.x && bc.y > bc.z) 
-        {
-            console.log('b')
-          if ( bc.x > bc.z) return [this.HighlightedPoint.a, this.HighlightedPoint.b]
-          else return[this.HighlightedPoint.b, this.HighlightedPoint.c]
-        } 
-        else if (bc.z > bc.x && bc.z > bc.y) 
-        {
-            console.log('c')
-          if ( bc.x > bc.y) return [this.HighlightedPoint.a, this.HighlightedPoint.c]
-          else return [this.HighlightedPoint.b, this.HighlightedPoint.c]
-        }
-        return null
     }
 
     #calculateDistanceBetweenLineAndPoint(point, linePoint1, linePoint2) {
@@ -247,7 +317,6 @@ export default class RayCasting extends EventEmitter
 
     #MouseDown(event)
     {
-        console.log(instance.scene.children)
         if(event.button === 0)
         {
             if (instance.pointsList.length >= 2)

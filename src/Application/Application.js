@@ -97,7 +97,7 @@ export default class Initialization
         this.selection.Enable()
 
         // Raycaster
-        this.rayCaster = new RayCasting(this.camera, this.scene, this.renderer, this.importedModels)
+        this.rayCaster = new RayCasting(this.camera, this.scene, this.renderer, this.importedModels, this.ifcLoader)
 
         //Creates grids and axes in the scene
         //this.grid = new THREE.GridHelper(50, 30);

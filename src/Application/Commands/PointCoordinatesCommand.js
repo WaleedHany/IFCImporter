@@ -23,10 +23,10 @@ export default class PointCoordinatesCommand extends Command
                                     //fillColor: { r: 255, g: 255, b: 255, a: 0.2 },
                                     textColor: { r: 117, g: 10, b: 201, a: 1.0 },
                                     vAlign: "center", hAlign: "center" });
-        this.text.canBeRayCasted = false
+        this.text.canNotBeRayCasted = false
         this.text.material.depthTest = false
         this.highLight = TextLabels.createHighLight(this.point) 
-        this.highLight.canBeRayCasted = false
+        this.highLight.canNotBeRayCasted = false
     }
 
     execute()

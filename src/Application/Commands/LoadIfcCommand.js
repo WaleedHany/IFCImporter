@@ -37,69 +37,13 @@ export default class LoadIfcCommand extends Command
                     //this.scene.add(ifcModel)
                     // add to imported models list
                     this.init.importedModels.models.push(this.model)
-                    
+
                     /**
                      * Create new objects from imported ifc model
                      */
-                    const expressIds = this.model.geometry.attributes.expressID.array
-                    const positions = this.model.geometry.getAttribute('position').array
-                    const normals = this.model.geometry.getAttribute('normal').array
-                
-                    this.materials = this.model.material
-                    let prevId = 0
-                    let currentId = 0
-
-                    for(let i = 0; i < expressIds.length; i++)
-                    {
-                        currentId = expressIds[i]    
-                        if ((currentId !== prevId && i !== 0) || i == expressIds.length-1)
-                        {
-                             try
-                             {
-                                const obj = this.ifcLoader.ifcManager.createSubset({
-                                modelID: this.model.modelID,
-                                ids: [prevId],
-                                scene: this.model,
-                                removePrevious: true 
-                                })   
-                                if(obj.geometry != null)   
-                                {
-                                    const indeces = obj.geometry.index.array
-                                    const subObjects = obj.geometry.groups.filter(x => x.count > 0)
-                                    if(subObjects.length > 0)
-                                    {         
-                                        let materials = []
-                                        for(const obj of subObjects)
-                                        {
-                                            materials.push(this.materials[obj.materialIndex])
-                                        }
-                                        let object = new IFCObject(
-                                            this.model.modelID, prevId, 
-                                            positions, normals, indeces, 
-                                            subObjects, materials,
-                                            this.ifcLoader.ifcManager)
-                                        // add to local stored objects for undo operation
-                                        this.createdObjects.push(object)
-                                        // add to loaded objects list
-                                        this.init.importedModels.ifcObjects.push(object)
-                                        // add to scene
-                                        this.scene.add(object.mesh)
-                                    }
-                                }
-                            }
-                            catch(err){
-                                console.log(err)
-                                continue
-                            }       
-                        }   
-                        else if(currentId != prevId && i == 0)
-                        {
-                           prevId = expressIds[i]
-                        }
-                        prevId = currentId
-                    }
-                    this.ifcLoader.ifcManager.removeSubset(this.model.modelID)
-
+                    this.#CreateNewObjectsFromIfcObject()
+                    
+                    
                     // Adjust positions for each imported (created) element
                     for(const object of this.createdObjects)
                     {
@@ -174,5 +118,74 @@ export default class LoadIfcCommand extends Command
         } 
         this.path = null
         this.model = null
+    }
+
+    /**
+    * Create new objects from imported ifc model
+    */
+    #CreateNewObjectsFromIfcObject(enable = true)
+    {
+        if(!enable) return
+
+        const expressIds = this.model.geometry.attributes.expressID.array
+        const positions = this.model.geometry.getAttribute('position').array
+        const normals = this.model.geometry.getAttribute('normal').array
+    
+        this.materials = this.model.material
+        let prevId = 0
+        let currentId = 0
+
+        for(let i = 0; i < expressIds.length; i++)
+        {
+            currentId = expressIds[i]    
+            if ((currentId !== prevId && i !== 0) || i == expressIds.length-1)
+            {
+                 try
+                 {
+                    const obj = this.ifcLoader.ifcManager.createSubset({
+                    modelID: this.model.modelID,
+                    ids: [prevId],
+                    scene: this.model,
+                    removePrevious: true 
+                    })   
+                    this.#AddNewObjectFromSubset(obj, prevId, positions, normals)
+                    
+                }
+                catch(err){
+                    console.log(err)
+                    continue
+                }       
+            }   
+            prevId = currentId
+        }
+        this.ifcLoader.ifcManager.removeSubset(this.model.modelID)
+    }
+
+    #AddNewObjectFromSubset(obj, prevId, positions, normals)
+    {
+        if(obj.geometry != null)   
+        {
+            const indeces = obj.geometry.index.array
+            const subObjects = obj.geometry.groups.filter(x => x.count > 0)
+            if(subObjects.length > 0)
+            {         
+                let materials = []
+                for(const o of subObjects)
+                {
+                    materials.push(this.materials[o.materialIndex])
+                }
+                let object = new IFCObject(
+                    this.model.modelID, prevId, 
+                    positions, normals, indeces, 
+                    subObjects, materials,
+                    this.ifcLoader.ifcManager)
+                // add to local stored objects for undo operation
+                this.createdObjects.push(object)
+                // add to loaded objects list
+                this.init.importedModels.ifcObjects.push(object)
+                // add to scene
+                this.scene.add(object.mesh)
+            }
+        }
     }
 }

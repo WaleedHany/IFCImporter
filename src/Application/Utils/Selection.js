@@ -88,7 +88,7 @@ export default class Selection
         }
 
         // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canBeRayCasted'))
+        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'))
         const intersection = this.raycaster.intersectObjects(allowedIntersections)[0];
         if(intersection != null && intersection.object.hasOwnProperty('modelObject'))
         {
@@ -116,7 +116,7 @@ export default class Selection
         this.raycaster.setFromCamera(this.mouse, this.camera)
         //}
         // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canBeRayCasted'))
+        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'))
         const intersection = this.raycaster.intersectObjects(allowedIntersections, false)[0];
 
         if(intersection != null && intersection.object.hasOwnProperty('modelObject'))

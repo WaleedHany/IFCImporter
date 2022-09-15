@@ -23,6 +23,7 @@ export default class DimentionBetweenLineAndPoint extends Command
         this.lineGeom = new THREE.BufferGeometry().setFromPoints(this. points )
         this.Line = new THREE.Line( this.lineGeom, this.linematerial )
         this.Line.name = 'TwoPointsDimentionLine'
+        this.Line.canNotBeRayCasted = false
         this.distance = this.point.distanceTo(this.endPoint)
         this.distanceString = this.distance.toFixed(3) + " [m]"
         this.textPosition = this.#GetTextPosition(this.point, this.endPoint)
@@ -39,6 +40,7 @@ export default class DimentionBetweenLineAndPoint extends Command
             new THREE.BufferGeometry().setFromPoints([nearerPoint, this.endPoint]), 
             this.subLinematerial)
         this.text.material.depthTest = false
+        this.text.canNotBeRayCasted = false
     }
 
     execute()
@@ -81,7 +83,6 @@ export default class DimentionBetweenLineAndPoint extends Command
         {
             perpendicularVector = lineVector.clone().cross(zDirection).normalize().cross(lineVector).normalize()
         }
-        console.log(perpendicularVector)
         const initialPosition = startPoint.clone().add(endPoint.clone().sub(startPoint).normalize().multiplyScalar(0.5*(startPoint.distanceTo(endPoint))))
         return initialPosition.add(perpendicularVector.multiplyScalar(0.5))
     }
@@ -89,10 +90,8 @@ export default class DimentionBetweenLineAndPoint extends Command
     #GetIntersectionBetweenPointAndLine(line, point)
     {
         const vector = point.clone().sub(line.points[0])
-        console.log(vector.dot(line.vector))
         const projection = vector.dot(line.vector)
                           /Math.sqrt((line.vector.x * line.vector.x) + (line.vector.y * line.vector.y) +(line.vector.z * line.vector.z))
-        console.log(projection)
         return line.points[0].clone().add(line.vector.clone().normalize().multiplyScalar(projection))
     }
 }

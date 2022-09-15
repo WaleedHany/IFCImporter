@@ -111601,7 +111601,7 @@ class Selection
         }
 
         // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canBeRayCasted'));
+        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'));
         const intersection = this.raycaster.intersectObjects(allowedIntersections)[0];
         if(intersection != null && intersection.object.hasOwnProperty('modelObject'))
         {
@@ -111629,7 +111629,7 @@ class Selection
         this.raycaster.setFromCamera(this.mouse, this.camera);
         //}
         // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canBeRayCasted'));
+        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'));
         const intersection = this.raycaster.intersectObjects(allowedIntersections, false)[0];
 
         if(intersection != null && intersection.object.hasOwnProperty('modelObject'))
@@ -111850,7 +111850,7 @@ let instance$1 = null;
 
 class RayCasting extends EventEmitter
 {  
-    constructor(camera, scene, renderer, importedIfcObjects)
+    constructor(camera, scene, renderer, importedIfcObjects, ifcLoader)
     {
         // instansiate base class
         super();
@@ -111862,6 +111862,8 @@ class RayCasting extends EventEmitter
 
         this.camera = camera.instance;
         this.scene = scene;
+
+        this.ifcLoader = ifcLoader;
         
         this.importedObjects = importedIfcObjects;
         this.renderer = renderer.instance;
@@ -111888,6 +111890,7 @@ class RayCasting extends EventEmitter
         this.Line = new Line( lineGeom, this.LineMaterial );
         this.Line.name = 'EdgeLineHighlight';
         this.LinePoints = [];
+
     }
 
     /**
@@ -111910,14 +111913,16 @@ class RayCasting extends EventEmitter
         this.#UpdateMousePosition(event); 
         this.raycaster.setFromCamera(this.mouse, this.camera);
         // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canBeRayCasted'));
+        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'));
         const intersection = this.raycaster.intersectObjects(allowedIntersections)[0];
-        if(intersection != null && intersection.object.hasOwnProperty('modelObject'))
-        {
+        if(intersection != null ) // && intersection.object.hasOwnProperty('modelObject')
+        { 
+            let point;
             intersection.object.worldToLocal(intersection.point);
-            let point = this.#setPos(intersection, intersection.point);
+            point = this.#setPos(intersection, intersection.point);
             intersection.object.localToWorld(point);
             intersection.object.localToWorld(intersection.point);
+           
             if(point != null && intersection.point.distanceTo(point) < 0.3 && !this.selectLine)
             {
                this.marker.position.set(point.x, point.y, point.z);
@@ -111939,29 +111944,118 @@ class RayCasting extends EventEmitter
             {
                this.scene.remove(this.marker);
             }
-            intersection.object.worldToLocal(intersection.point);
-            let edge = this.#setEdge(intersection, point); 
-            if ( edge != null && edge.length == 3 && this.selectLine)
+            if(this.selectLine)
             {
-                intersection.object.localToWorld(edge[0]);
-                intersection.object.localToWorld(edge[1]);
-                intersection.object.localToWorld(edge[2]);
-                intersection.object.localToWorld(intersection.point);
-                this.#HighLightEdges(intersection, edge);
+                this.#RayCastAllEdges(intersection, false);    
+                this.#RayCastOuterEdgesForSeparateMeshes(intersection); //, false) 
+                this.#RayCastOuterEdgesForIfcModel(intersection, false);
             }
-        } 
+         } 
+         else
+         {
+             this.scene.remove(this.marker);
+             this.#RemoveLineFromScene();
+         }
+    }
+
+    #RayCastAllEdges(intersection, enable = true)
+    {
+        let obj = intersection.object;
+
+        if(!enable) return
+        obj.worldToLocal(intersection.point);
+        let edge = this.#setEdge(intersection, intersection.point); 
+        if ( edge != null && edge.length == 3)
+        {
+            obj.localToWorld(edge[0]);
+            obj.localToWorld(edge[1]);
+            obj.localToWorld(edge[2]);
+            obj.localToWorld(intersection.point);
+            this.#HighLightEdges(intersection, edge);
+        }
         else
         {
-            this.scene.remove(this.marker);
-            this.#RemoveLineFromScene();
+          this.#RemoveLineFromScene();
         }
     }
 
+    #RayCastOuterEdgesForSeparateMeshes(intersection, enable = true)
+    {
+        if(!enable) return
+        const edges = new EdgesGeometry( intersection.object.geometry );
+        this.#GetOuterEdgesFromObject(edges, intersection);
+    }
+
+    #RayCastOuterEdgesForIfcModel(intersection, enable = true)
+    {
+        if(!enable) return
+        let edges;
+        const index = intersection.faceIndex;
+        const objectGeometry = intersection.object.geometry;
+        const id = this.ifcLoader.ifcManager.getExpressId(objectGeometry, index);
+        if(this.prevIntersectionId == id && this.pervSubSetEdges != null)
+        {
+            edges = this.pervSubSetEdges;
+            console.log('here');
+        }
+        else
+        {
+            console.log('there');
+            const obj = this.ifcLoader.ifcManager.createSubset({
+                modelID: intersection.object.modelID,
+                ids: [id],
+                scene: this.scene,
+                removePrevious: true 
+            }); 
+            edges = new EdgesGeometry( obj.geometry );
+        } 
+        this.modelID = intersection.object.modelID;
+        this.prevIntersectionId = id;
+        this.pervSubSetEdges = edges;
+        this.ifcLoader.ifcManager.removeSubset(intersection.object.modelID);
+        this.#GetOuterEdgesFromObject(edges, intersection);
+    }
+
+    #GetOuterEdgesFromObject(edges, intersection)
+    {
+        let points = edges.attributes.position.array;
+        let vectors = [];
+         for(let i = 0; i < points.length -6; i+=6)
+         {
+            points[i + 0] += intersection.object.position.x;
+            points[i + 3] += intersection.object.position.x;
+            points[i + 1] += intersection.object.position.y;
+            points[i + 4] += intersection.object.position.y;
+            points[i + 2] += intersection.object.position.z;
+            points[i + 5] += intersection.object.position.z;
+            let p1 = new Vector3(points[i], points[i+1], points[i+2]);
+            let p2 = new Vector3(points[i+3], points[i+4], points[i+5]);
+            vectors.push([p1,p2]);
+         }
+         vectors.sort((a, b) => 
+         ( this.#calculateDistanceBetweenLineAndPoint(intersection.point, a[0], a[1]) 
+         > this.#calculateDistanceBetweenLineAndPoint(intersection.point, b[0], b[1])) ? 1 : -1);
+         if ( vectors[0] != null && this.selectLine && this.#calculateDistanceBetweenLineAndPoint(intersection.point, vectors[0][0], vectors[0][1]) < 0.8)
+         {
+            this.#RemoveLineFromScene();
+            const geometry = new BufferGeometry().setFromPoints( vectors[0] );
+            this.Line = new Line( geometry, this.LineMaterial );
+            this.Line.name = 'EdgeLineHighlight';
+            this.Line.depthTest = false;
+            this.scene.add(this.Line);
+        }   
+        else
+        {
+            this.#RemoveLineFromScene();
+        } 
+    }
+
+
     #setPos(intersection, point) 
     {
-        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 0);
-        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 1);
-        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 2);
+        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.a); //intersection.faceIndex * 3 + 0);
+        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.b); //intersection.faceIndex * 3 + 1);
+        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.c); //intersection.faceIndex * 3 + 2);
         let bc = new Vector3();
         this.triangle.set(this.HighlightedPoint.a, this.HighlightedPoint.b, this.HighlightedPoint.c);
         this.triangle.getBarycoord(point, bc);
@@ -112008,6 +112102,7 @@ class RayCasting extends EventEmitter
             this.#RemoveLineFromScene();
             const geometry = new BufferGeometry().setFromPoints( obj.points );
             this.Line = new Line( geometry, this.LineMaterial );
+            this.Line.name = 'EdgeLineHighlight';
             this.Line.depthTest = false;
             this.scene.add(this.Line);
         }   
@@ -112019,9 +112114,9 @@ class RayCasting extends EventEmitter
 
     #setEdge(intersection, point) 
     {
-        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 0);
-        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 1);
-        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.faceIndex * 3 + 2);
+        this.HighlightedPoint.a.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.a);
+        this.HighlightedPoint.b.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.b);
+        this.HighlightedPoint.c.fromBufferAttribute(intersection.object.geometry.attributes.position, intersection.face.c);
         let bc = new Vector3();
         this.triangle.set(this.HighlightedPoint.a, this.HighlightedPoint.b, this.HighlightedPoint.c);
         this.triangle.getBarycoord(point, bc);
@@ -112031,29 +112126,6 @@ class RayCasting extends EventEmitter
         // {
         //     return null
         // }     
-    }
-
-    #GetEdgePoints(bc)
-    {
-        if (bc.x > bc.y && bc.x > bc.z)
-        {
-            console.log('a');
-          if ( bc.y > bc.z) return [this.HighlightedPoint.a, this.HighlightedPoint.b]
-          else return [this.HighlightedPoint.a, this.HighlightedPoint.c]
-        } 
-        else if (bc.y > bc.x && bc.y > bc.z) 
-        {
-            console.log('b');
-          if ( bc.x > bc.z) return [this.HighlightedPoint.a, this.HighlightedPoint.b]
-          else return [this.HighlightedPoint.b, this.HighlightedPoint.c]
-        } 
-        else if (bc.z > bc.x && bc.z > bc.y) 
-        {
-            console.log('c');
-          if ( bc.x > bc.y) return [this.HighlightedPoint.a, this.HighlightedPoint.c]
-          else return [this.HighlightedPoint.b, this.HighlightedPoint.c]
-        }
-        return null
     }
 
     #calculateDistanceBetweenLineAndPoint(point, linePoint1, linePoint2) {
@@ -112086,7 +112158,6 @@ class RayCasting extends EventEmitter
 
     #MouseDown(event)
     {
-        console.log(instance$1.scene.children);
         if(event.button === 0)
         {
             if (instance$1.pointsList.length >= 2)
@@ -112278,7 +112349,7 @@ class Initialization
         this.selection.Enable();
 
         // Raycaster
-        this.rayCaster = new RayCasting(this.camera, this.scene, this.renderer, this.importedModels);
+        this.rayCaster = new RayCasting(this.camera, this.scene, this.renderer, this.importedModels, this.ifcLoader);
 
         //Creates grids and axes in the scene
         //this.grid = new THREE.GridHelper(50, 30);
@@ -112600,69 +112671,13 @@ class LoadIfcCommand extends Command
                     //this.scene.add(ifcModel)
                     // add to imported models list
                     this.init.importedModels.models.push(this.model);
-                    
+
                     /**
                      * Create new objects from imported ifc model
                      */
-                    const expressIds = this.model.geometry.attributes.expressID.array;
-                    const positions = this.model.geometry.getAttribute('position').array;
-                    const normals = this.model.geometry.getAttribute('normal').array;
-                
-                    this.materials = this.model.material;
-                    let prevId = 0;
-                    let currentId = 0;
-
-                    for(let i = 0; i < expressIds.length; i++)
-                    {
-                        currentId = expressIds[i];    
-                        if ((currentId !== prevId && i !== 0) || i == expressIds.length-1)
-                        {
-                             try
-                             {
-                                const obj = this.ifcLoader.ifcManager.createSubset({
-                                modelID: this.model.modelID,
-                                ids: [prevId],
-                                scene: this.model,
-                                removePrevious: true 
-                                });   
-                                if(obj.geometry != null)   
-                                {
-                                    const indeces = obj.geometry.index.array;
-                                    const subObjects = obj.geometry.groups.filter(x => x.count > 0);
-                                    if(subObjects.length > 0)
-                                    {         
-                                        let materials = [];
-                                        for(const obj of subObjects)
-                                        {
-                                            materials.push(this.materials[obj.materialIndex]);
-                                        }
-                                        let object = new IFCObject(
-                                            this.model.modelID, prevId, 
-                                            positions, normals, indeces, 
-                                            subObjects, materials,
-                                            this.ifcLoader.ifcManager);
-                                        // add to local stored objects for undo operation
-                                        this.createdObjects.push(object);
-                                        // add to loaded objects list
-                                        this.init.importedModels.ifcObjects.push(object);
-                                        // add to scene
-                                        this.scene.add(object.mesh);
-                                    }
-                                }
-                            }
-                            catch(err){
-                                console.log(err);
-                                continue
-                            }       
-                        }   
-                        else if(currentId != prevId && i == 0)
-                        {
-                           prevId = expressIds[i];
-                        }
-                        prevId = currentId;
-                    }
-                    this.ifcLoader.ifcManager.removeSubset(this.model.modelID);
-
+                    this.#CreateNewObjectsFromIfcObject();
+                    
+                    
                     // Adjust positions for each imported (created) element
                     for(const object of this.createdObjects)
                     {
@@ -112737,6 +112752,75 @@ class LoadIfcCommand extends Command
         } 
         this.path = null;
         this.model = null;
+    }
+
+    /**
+    * Create new objects from imported ifc model
+    */
+    #CreateNewObjectsFromIfcObject(enable = true)
+    {
+        if(!enable) return
+
+        const expressIds = this.model.geometry.attributes.expressID.array;
+        const positions = this.model.geometry.getAttribute('position').array;
+        const normals = this.model.geometry.getAttribute('normal').array;
+    
+        this.materials = this.model.material;
+        let prevId = 0;
+        let currentId = 0;
+
+        for(let i = 0; i < expressIds.length; i++)
+        {
+            currentId = expressIds[i];    
+            if ((currentId !== prevId && i !== 0) || i == expressIds.length-1)
+            {
+                 try
+                 {
+                    const obj = this.ifcLoader.ifcManager.createSubset({
+                    modelID: this.model.modelID,
+                    ids: [prevId],
+                    scene: this.model,
+                    removePrevious: true 
+                    });   
+                    this.#AddNewObjectFromSubset(obj, prevId, positions, normals);
+                    
+                }
+                catch(err){
+                    console.log(err);
+                    continue
+                }       
+            }   
+            prevId = currentId;
+        }
+        this.ifcLoader.ifcManager.removeSubset(this.model.modelID);
+    }
+
+    #AddNewObjectFromSubset(obj, prevId, positions, normals)
+    {
+        if(obj.geometry != null)   
+        {
+            const indeces = obj.geometry.index.array;
+            const subObjects = obj.geometry.groups.filter(x => x.count > 0);
+            if(subObjects.length > 0)
+            {         
+                let materials = [];
+                for(const o of subObjects)
+                {
+                    materials.push(this.materials[o.materialIndex]);
+                }
+                let object = new IFCObject(
+                    this.model.modelID, prevId, 
+                    positions, normals, indeces, 
+                    subObjects, materials,
+                    this.ifcLoader.ifcManager);
+                // add to local stored objects for undo operation
+                this.createdObjects.push(object);
+                // add to loaded objects list
+                this.init.importedModels.ifcObjects.push(object);
+                // add to scene
+                this.scene.add(object.mesh);
+            }
+        }
     }
 }
 
@@ -113045,11 +113129,6 @@ class TextLabels {
     }
 }
 
-/**
- * Load IFC file.
- * Convert and store IFC.js output geometry to a new three.js geometry.
- * Store IFC data for each object.
- */
 class DimentionBetweenTwoPoints extends Command
 {
     constructor(startPoint, endPoint, scene) 
@@ -113064,6 +113143,7 @@ class DimentionBetweenTwoPoints extends Command
         this.Line = new Line( this.lineGeom, this.linematerial );
         this.Line.material.depthTest = false;
         this.Line.name = 'TwoPointsDimentionLine';
+        this.Line.canNotBeRayCasted = false;
         this.distance = this.startPoint.distanceTo(this.endPoint);
         this.distanceString = this.distance.toFixed(3) + " [m]";
         this.textPosition = this.#GetTextPosition(this.startPoint, this.endPoint);
@@ -113071,6 +113151,7 @@ class DimentionBetweenTwoPoints extends Command
                                   { fontsize: 120, fontface: "Georgia", textColor: { r: 117, g: 10, b: 201, a: 1.0 },
                                    vAlign: "center", hAlign: "center" });
         this.text.material.depthTest = false;
+        this.text.canNotBeRayCasted = false;
     }
 
     execute()
@@ -113136,6 +113217,7 @@ class DimentionBetweenLineAndPoint extends Command
         this.lineGeom = new BufferGeometry().setFromPoints(this. points );
         this.Line = new Line( this.lineGeom, this.linematerial );
         this.Line.name = 'TwoPointsDimentionLine';
+        this.Line.canNotBeRayCasted = false;
         this.distance = this.point.distanceTo(this.endPoint);
         this.distanceString = this.distance.toFixed(3) + " [m]";
         this.textPosition = this.#GetTextPosition(this.point, this.endPoint);
@@ -113152,6 +113234,7 @@ class DimentionBetweenLineAndPoint extends Command
             new BufferGeometry().setFromPoints([nearerPoint, this.endPoint]), 
             this.subLinematerial);
         this.text.material.depthTest = false;
+        this.text.canNotBeRayCasted = false;
     }
 
     execute()
@@ -113194,7 +113277,6 @@ class DimentionBetweenLineAndPoint extends Command
         {
             perpendicularVector = lineVector.clone().cross(zDirection).normalize().cross(lineVector).normalize();
         }
-        console.log(perpendicularVector);
         const initialPosition = startPoint.clone().add(endPoint.clone().sub(startPoint).normalize().multiplyScalar(0.5*(startPoint.distanceTo(endPoint))));
         return initialPosition.add(perpendicularVector.multiplyScalar(0.5))
     }
@@ -113202,10 +113284,8 @@ class DimentionBetweenLineAndPoint extends Command
     #GetIntersectionBetweenPointAndLine(line, point)
     {
         const vector = point.clone().sub(line.points[0]);
-        console.log(vector.dot(line.vector));
         const projection = vector.dot(line.vector)
                           /Math.sqrt((line.vector.x * line.vector.x) + (line.vector.y * line.vector.y) +(line.vector.z * line.vector.z));
-        console.log(projection);
         return line.points[0].clone().add(line.vector.clone().normalize().multiplyScalar(projection))
     }
 }
@@ -113230,10 +113310,10 @@ class PointCoordinatesCommand extends Command
                                     //fillColor: { r: 255, g: 255, b: 255, a: 0.2 },
                                     textColor: { r: 117, g: 10, b: 201, a: 1.0 },
                                     vAlign: "center", hAlign: "center" });
-        this.text.canBeRayCasted = false;
+        this.text.canNotBeRayCasted = false;
         this.text.material.depthTest = false;
         this.highLight = TextLabels.createHighLight(this.point); 
-        this.highLight.canBeRayCasted = false;
+        this.highLight.canNotBeRayCasted = false;
     }
 
     execute()
@@ -113543,7 +113623,6 @@ function CopyElementDialog()
      
      init.rayCaster.on('TwoPointsSelected', ()=>
      {
-       console.log(init.rayCaster.pointsList[0]);
        init.commands.executeCommand(new DimentionBetweenTwoPoints(init.rayCaster.pointsList[0], init.rayCaster.pointsList[1], init.scene));
        init.rayCaster.Disable();
        init.selection.Enable();

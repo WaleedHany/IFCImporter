@@ -107,7 +107,7 @@ export default class Initialization
         this.axes.renderOrder = 1;
         this.scene.add(this.axes);
 
-        this.HasHiddenElements = false
+        this.AllowHide = false
         this.HiddenElements = []
 
         THREE.Object3D.prototype.rotateAroundWorldAxis = function() {

@@ -112359,7 +112359,7 @@ class Initialization
         this.axes.renderOrder = 1;
         this.scene.add(this.axes);
 
-        this.HasHiddenElements = false;
+        this.AllowHide = false;
         this.HiddenElements = [];
 
         Object3D.prototype.rotateAroundWorldAxis = function() {
@@ -113623,6 +113623,8 @@ function CopyElementDialog()
       document.getElementById('positionZ').innerHTML = 0;
       init.rayCaster.off('TwoPointsSelected');
       document.removeEventListener('keydown', stop);
+      init.rayCaster.Disable();
+      init.selection.Enable();
     };
 
     init.rayCaster.on('TwoPointsSelected', ()=>
@@ -113820,12 +113822,15 @@ function Delete()
  function Hide()
  {
    let selectedElements = [...init.SelectedObjects.selectedObjectsList];
-   if (!init.HasHiddenElements) init.HasHiddenElements = true;
-   else init.HasHiddenElements = false;
+   if (!init.AllowHide || selectedElements.length > 0)
+   {
+     init.AllowHide = true;
+   }  
+   else init.AllowHide = false;
    // unselect all selected elements
    init.unSelect();
    // Delete element, call delete command
-   Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.HasHiddenElements);
+   Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.AllowHide);
  }
 
 //#endregion

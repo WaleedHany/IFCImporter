@@ -5,7 +5,135 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="./Styles.css" />
+  <!-- <link rel="stylesheet" href="./Styles.css" /> -->
+  <style>
+    * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.header {
+  overflow: hidden;
+  background-color: rgb(60, 63, 66);
+  padding: 4px 15px;
+  padding-bottom: 1px;
+  z-index: 200;
+  position: relative;
+}
+
+.header a {
+  float: left;
+  color: black;
+  text-align: center;
+  padding: 6px;
+  text-decoration: none;
+  font-size: 14px;
+  line-height: 10px;
+  border-radius: 4px;
+}
+
+.header a.logo {
+  font-size: 25px;
+  font-weight: bold;
+}
+
+.header a:hover {
+  background-color: #ddd;
+  color: black;
+}
+
+.header a.active {
+  background-color: dodgerblue;
+  color: white;
+}
+
+.header-left {
+  float: left;
+  align-items: center;
+}
+
+.header-right {
+  float: right;
+}
+
+@media screen and (max-width: 500px) {
+  .header a {
+    float: none;
+    display: block;
+    text-align: left;
+  }
+
+  .header-right {
+    float: none;
+  }
+}
+
+html {
+  overflow: hidden;
+}
+
+body {
+  overflow: hidden;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+ /* // Canvas class */
+.webgl {
+  position: fixed;
+  top: 0;
+  left: 0;
+  outline: none;
+  z-index: -1;
+  background-image: linear-gradient(180deg, rgb(178, 206, 255), rgb(255, 255, 255));
+}
+
+.image-button>input {
+  display: none;
+}
+
+
+
+.image-button img {
+  margin-top: 1%;
+  margin-left: 1%;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  border: 2px solid #AAA;
+  z-index: 1;
+  position: relative;
+  border-radius: 4px;
+}
+
+.selectBox {
+  visibility: inherit;
+  border: 1px solid #55aaff;
+  /* border: 2px dotted #757575; */
+  background-color: rgba(75, 183, 255, 0.25);
+  /*rgba(255, 207, 75, 0.25) ; */
+  position: fixed;
+}
+
+.hiddenSelectBox {
+  visibility: inherit;
+  border: transparent;
+  /* border: 2px dotted #757575; */
+  background-color: transparent;
+  /*rgba(255, 207, 75, 0.25) ; */
+  position: fixed;
+}
+
+.vl {
+  border-left: 2px solid gray;
+  height: 30px;
+  margin-left: 8px;
+  margin-right: 8px;
+  margin-top: 3px;
+  margin-bottom: 3px;
+}
+    </style>
   <title>Document</title>
 </head>
 

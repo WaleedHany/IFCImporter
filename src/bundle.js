@@ -113748,6 +113748,7 @@ document.addEventListener('keydown', function(event)
 /**
  * Undo
  */
+ document.getElementById("Undo").onclick=function(){Undo();};
 function Undo()
 {
    // unselect all selected elements
@@ -113760,6 +113761,7 @@ function Undo()
 /**
  * Redo
  */
+ document.getElementById("Redo").onclick=function(){Redo();};
 function Redo()
 {
    // unselect all selected elements

@@ -116,6 +116,15 @@ body {
   position: fixed;
 }
 
+.vl {
+  border-left: 2px solid gray;
+  height: 30px;
+  margin-left: 8px;
+  margin-right: 8px;
+  margin-top: 3px;
+  margin-bottom: 3px;
+}
+
 /* .hoverHighlight {
   position: absolute;
   height: 15px;

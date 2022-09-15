@@ -11,11 +11,33 @@
 
 
 <body>
+
   <div class="header">
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Undo">
+          <img src="../static/Images/Undo.png" alt="Undo" title="Undo last command"
+            style="padding: 6px; background-color: #fefefe;" />
+        </label>
+        <input type="button" id="Undo"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Redo">
+          <img src="../static/Images/Undo.png" 
+          style="transform: scaleX(-1); background-color: #fefefe; padding: 6px;" alt="Redo" title="Redo last rollback" />
+        </label>
+        <input type="button" id="Redo"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="vl"></div>
+    </div>
     <div class="header-left">
       <div class="image-button">
         <label for="file-input">
-          <img src="../static/Images/Upload.png" alt="upload a file"/>
+          <img src="../static/Images/Upload.png" alt="upload a file" />
         </label>
         <input type="file" name="load" id="file-input" accept=".ifc,.IFC" />
       </div>
@@ -23,15 +45,20 @@
     <div class="header-left">
       <div class="image-button" style="margin-left:8px ;">
         <label for="model-location">
-          <img src="../static/Images/Location.png" alt="specify model location"/>
+          <img src="../static/Images/Location.png" alt="specify model location"
+            title="Inset model reference point position" />
         </label>
         <input type="button" id="model-location"></input>
       </div>
     </div>
     <div class="header-left">
-      <div class="image-button" style="margin-left:8px ;">
+      <div class="vl"></div>
+    </div>
+    <div class="header-left">
+      <div class="image-button">
         <label for="move-button">
-          <img src="../static/Images/icon-move-25.jpg" style="background-color: #fefefe;" alt="move element"/>
+          <img src="../static/Images/icon-move-25.jpg" style="background-color: #fefefe;" alt="move element"
+            title="Move an IFC object" />
         </label>
         <input type="button" id="move-button"></input>
       </div>
@@ -39,23 +66,28 @@
     <div class="header-left">
       <div class="image-button" style="margin-left:8px ;">
         <label for="copy-button">
-          <img src="../static/Images/CopyIcon.jpg" alt="copy elememt"/>
+          <img src="../static/Images/CopyIcon.jpg" alt="copy elememt" title="Copy an IFC object" />
         </label>
         <input type="button" id="copy-button"></input>
       </div>
     </div>
     <div class="header-left">
-      <div class="image-button" style="margin-left:8px ;">
+      <div class="image-button" style="margin-left:8px ; margin-right: 2px;">
         <label for="rotate-button">
-          <img src="../static/Images/Rotate.png" alt="reotate element"/>
+          <img src="../static/Images/Rotate.png" alt="reotate element"
+            title="Rotate an IFC object about Z-axis throught the objects centroid" />
         </label>
         <input type="button" id="rotate-button"></input>
       </div>
     </div>
     <div class="header-left">
-      <div class="image-button" style="margin-left:8px ;">
+      <div class="vl"></div>
+    </div>
+    <div class="header-left">
+      <div class="image-button">
         <label for="Points-dimentions">
-          <img src="../static/Images/pointToPoinDim.png" alt="point to point dimentions" style="background-color: white;"/>
+          <img src="../static/Images/two_point_distance.png" alt="point to point dimentions"
+            style="background-color: white;" title="Add dimension between two points" />
         </label>
         <input type="button" id="Points-dimentions"></input>
       </div>
@@ -63,7 +95,8 @@
     <div class="header-left">
       <div class="image-button" style="margin-left:8px ;">
         <label for="Line-Point-dimentions">
-          <img src="../static/Images/dimLine.png" alt="point to point dimentions" style="background-color: white;"/>
+          <img src="../static/Images/edge_to_point.png" alt="point to point dimentions"
+            style="background-color: white; padding: 4px;" title="Add edge to point dimension" />
         </label>
         <input type="button" id="Line-Point-dimentions"></input>
       </div>
@@ -71,7 +104,9 @@
     <div class="header-left">
       <div class="image-button" style="margin-left:8px ;">
         <label for="Line-dimentions">
-          <img src="../static/Images/dimLine.png" alt="point to point dimentions" style="background-color: white;"/>
+          <img src="../static/Images/edge_Distance.png" alt="point to point dimentions"
+            style="background-color: white; padding-bottom: 4px; padding-left: 4px; padding-right: 2px; padding-top: 2px;"
+            title="Add edge dimension" />
         </label>
         <input type="button" id="Line-dimentions"></input>
       </div>
@@ -79,7 +114,8 @@
     <div class="header-left">
       <div class="image-button" style="margin-left:8px ;">
         <label for="Point-Coordinates">
-          <img src="../static/Images/Location.png" alt="point to point dimentions" style="background-color: rgb(118, 118, 118);"/>
+          <img src="../static/Images/Location.png" alt="point coorsinates" style="background-color: rgb(118, 118, 118);"
+            title="Show point coordinates" />
         </label>
         <input type="button" id="Point-Coordinates"></input>
       </div>

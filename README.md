@@ -16,11 +16,6 @@ This project is experimental and still in progress, and still open to adding mor
     - Deleting an object
     - Hide objects and show hidden objects
 - Multiple selection by mouse dragging, and by pressing Shift+click  
-- Allows adding dimensions interactevly to IFC objects in model
-    - Point to point dimensions
-    - Edge to point dimensions
-    - Edge length dimension
-    - Show coordinates of a selected point
 - Supports gradient backgrounds
 - Allows defining IFC model's reference point position in space, and changing model's position (according to model's reference point) 
 ## Notes
@@ -34,12 +29,11 @@ This project is experimental and still in progress, and still open to adding mor
     - Drag left mouse for multiple selection, or Shift+click for multiple Selection
     - Esc or double click to unselect
 - Select an object and press Delete to delete an element
-- Dimensions are considered in meter as it is the custom defined unit of THREE.js
 
 
 ## Demo
 - Video demo
-https://youtu.be/R6AS0MvQgqg
+https://youtu.be/RvOgSgibfdw
 - Application demo
 https://waleedhany.github.io/IFCImporter/src/index.html
 

@@ -160,99 +160,6 @@ function CopyElementDialog()
 }
 
 /**
- * Add dimention between two points
- */
- document.getElementById("Points-dimentions").onclick=function(){AddTwoPointsDimentions()};
- function AddTwoPointsDimentions() 
- {
-     init.selection.Disable()
-     init.rayCaster.Enable()
-     document.addEventListener('keydown', stop)
-     
-     init.rayCaster.on('TwoPointsSelected', ()=>
-     {
-       init.commands.executeCommand(new DimentionBetweenTwoPoints(init.rayCaster.pointsList[0], init.rayCaster.pointsList[1], init.scene))
-       init.rayCaster.Disable()
-       init.selection.Enable()
-       init.unSelect()
-       init.rayCaster.off('TwoPointsSelected')
-       document.removeEventListener('keydown', stop)
-     })
- }
-
- /**
- * Add dimention between line and point
- */
-  document.getElementById("Line-Point-dimentions").onclick=function(){LinePointDimentions()};
-  function LinePointDimentions() 
-  {
-      init.selection.Disable()
-      init.rayCaster.Enable(true)
-      document.addEventListener('keydown', stop)
-      
-      init.rayCaster.on('LineAndPointSelected', ()=>
-      {
-        const lineCoordinates = init.rayCaster.Line.geometry.attributes.position.array
-        const lineStartPoint = new THREE.Vector3(lineCoordinates[0], lineCoordinates[1], lineCoordinates[2])
-        const lineEndPoint = new THREE.Vector3(lineCoordinates[3], lineCoordinates[4], lineCoordinates[5])
-        const lineVector = lineEndPoint.clone().sub(lineStartPoint)
-        const line = {points:[lineStartPoint, lineEndPoint], vector: lineVector}
-        init.commands.executeCommand(new DimentionBetweenLineAndPoint(line, init.rayCaster.pointsList[0], init.scene))
-        init.rayCaster.Disable()
-        init.selection.Enable()
-        init.unSelect()
-        init.rayCaster.off('LineAndPointSelected')
-        document.removeEventListener('keydown', stop)
-      })
-  }
-
-   /**
- * Add dimention for line
- */
-    document.getElementById("Line-dimentions").onclick=function(){LineDimentions()};
-    function LineDimentions() 
-    {
-        init.selection.Disable()
-        init.rayCaster.Enable(true)
-        document.addEventListener('keydown', stop)
-        
-        init.rayCaster.on('LineSelected', ()=>
-        {
-          const lineCoordinates = init.rayCaster.Line.geometry.attributes.position.array
-          const lineStartPoint = new THREE.Vector3(lineCoordinates[0], lineCoordinates[1], lineCoordinates[2])
-          const lineEndPoint = new THREE.Vector3(lineCoordinates[3], lineCoordinates[4], lineCoordinates[5])
-          init.commands.executeCommand(new DimentionBetweenTwoPoints(lineStartPoint, lineEndPoint, init.scene))
-          init.rayCaster.Disable()
-          init.selection.Enable()
-          init.unSelect()
-          init.rayCaster.off('LineSelected')
-          document.removeEventListener('keydown', stop)
-        })
-    }
-
-      /**
- * Add point coordinates 
- */
-       document.getElementById("Point-Coordinates").onclick=function(){PointCoordinates()};
-       function PointCoordinates() 
-       {
-           init.selection.Disable()
-           init.rayCaster.Enable()
-           document.addEventListener('keydown', stop)
-           
-           init.rayCaster.on('OnePointSelected', ()=>
-           {
-             const point = init.rayCaster.pointsList[0]
-             init.commands.executeCommand(new PointCoordinatesCommand(point, init.scene))
-             init.rayCaster.Disable()
-             init.selection.Enable()
-             init.unSelect()
-             init.rayCaster.off('OnePointSelected')
-             document.removeEventListener('keydown', stop)
-           })
-       }
-
-/**
  * Rotate element
  */
 document.getElementById("rotate-button").onclick=function(){RotateElementDialog()};
@@ -272,6 +179,7 @@ function RotateElementDialog()
     document.getElementById('rotationZ').innerHTML = "0"
   }; 
 }
+
 
 /**
  * Key board shortcuts

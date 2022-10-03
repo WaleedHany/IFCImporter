@@ -388,8 +388,7 @@ function onDocumentMouseMove(event) {
 document.getElementById("Split-Screen").onclick = function () {splitScreen()};
 function splitScreen()
 {
-  console.log('split')
-  const newCamera = new AddNewCamera(init.sizes, init.scene, init.canvas, false, init.cameraList, false)
+  const newCamera = new AddNewCamera(init.sizes, init.scene, init.canvas, false, init.cameraList, true)
   newCamera.execute()
 }
 

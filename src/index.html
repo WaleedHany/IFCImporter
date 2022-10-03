@@ -18,6 +18,7 @@
   background-color: rgb(60, 63, 66);
   padding: 4px 15px;
   padding-bottom: 1px;
+  border-bottom:3px solid  #90c2eb;
   z-index: 200;
   position: relative;
 }
@@ -84,6 +85,8 @@ body {
   position: fixed;
   top: 0;
   left: 0;
+  cursor: default;
+  border:3px solid  #90c2eb;
   outline: none;
   z-index: -1;
   background-image: linear-gradient(180deg, rgb(178, 206, 255), rgb(255, 255, 255));
@@ -92,8 +95,6 @@ body {
 .image-button>input {
   display: none;
 }
-
-
 
 .image-button img {
   margin-top: 1%;
@@ -133,6 +134,25 @@ body {
   margin-top: 3px;
   margin-bottom: 3px;
 }
+.vlt {
+  border-left: 4px solid rgb(144, 194, 235);
+  opacity: 0.3;
+  height:100%;
+  cursor: move;
+  visibility:collapse;
+  position:fixed;
+  left:50%;
+}
+.hrt {
+  border-bottom: 4px solid rgb(144, 194, 235);
+  opacity: 0.3;
+  width:100%;
+  cursor: move;
+  visibility:collapse;
+  position:fixed;
+  left:50%;
+}
+
     </style>
   <title>Document</title>
 </head>
@@ -226,7 +246,60 @@ body {
       </div>
     </div>
 
+    <div class="header-left">
+      <div class="vl"></div>
+    </div>
+    <div class="header-left">
+      <div class="image-button">
+        <label for="Points-dimentions">
+          <img src="../static/Images/two_point_distance.png" alt="point to point dimentions"
+            style="background-color: white;" title="Add dimension between two points" />
+        </label>
+        <input type="button" id="Points-dimentions"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Line-Point-dimentions">
+          <img src="../static/Images/edge_to_point.png" alt="point to point dimentions"
+            style="background-color: white; padding: 4px;" title="Add edge to point dimension" />
+        </label>
+        <input type="button" id="Line-Point-dimentions"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Line-dimentions">
+          <img src="../static/Images/edge_Distance.png" alt="point to point dimentions"
+            style="background-color: white; padding-bottom: 4px; padding-left: 4px; padding-right: 2px; padding-top: 2px;"
+            title="Add edge dimension" />
+        </label>
+        <input type="button" id="Line-dimentions"></input>
+      </div>
+    </div>
+    <div class="header-left">
+      <div class="image-button" style="margin-left:8px ;">
+        <label for="Point-Coordinates">
+          <img src="../static/Images/Location.png" alt="point coorsinates" style="background-color: rgb(118, 118, 118);"
+            title="Show point coordinates" />
+        </label>
+        <input type="button" id="Point-Coordinates"></input>
+      </div>
+    </div>
 
+    <div class="header-left">
+      <div class="vl"></div>
+    </div>
+
+    <div class="header-left">
+      <div class="image-button" style="margin-left:2px ;">
+        <label for="Split-Screen">
+          <img src="../static/Images/splitScreen.png" alt="Split Screen" style="background-color: rgb(250, 250, 250);"
+            title="Split screen mode" />
+        </label>
+        <input type="button" id="Split-Screen"></input>
+      </div>
+    </div>
   </div>
 
   <div title="Model location">
@@ -272,7 +345,10 @@ body {
     </dialog>
   </div>
 
-  <canvas id="canvas" class="webgl" style="background-color: linear-gradient(180deg, red, yellow)"> </canvas>
+  <canvas id="canvas" class="webgl" >   
+  </canvas>
+  
+  <div class="vlt" id="verticalSeparator"></div>
 
   <script type="Module" src="bundle.js"></script>
 </body>

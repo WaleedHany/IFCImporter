@@ -1,10 +1,12 @@
-import { Raycaster, Vector2, MeshLambertMaterial} from "three";
+import { Raycaster,Vector3, Vector2, MeshLambertMaterial, OrthographicCamera} from "three";
 import { SelectionBox } from 'three/examples/jsm/interactive/SelectionBox.js';
 import { SelectionHelper } from 'three/examples/jsm/interactive/SelectionHelper.js';
 
 const tempMouse = new Vector2()
 const canvas = document.querySelector('canvas.webgl')
 let instance = null
+let cameraVector = new Vector3();
+let dir = new Vector3();
 
 export default class Selection
 {  
@@ -24,7 +26,7 @@ export default class Selection
         }
         instance = this
 
-        this.camera = camera.instance
+        this.camera = camera
         this.scene = scene
 
         this.raycaster = new Raycaster();
@@ -41,7 +43,7 @@ export default class Selection
         this.selectMaterial = new MeshLambertMaterial({
             transparent: true,
             opacity: 0.4,
-            color: 0xff00ff,
+            color: 0xbb00ff,
             depthTest: false
          })
 
@@ -49,10 +51,10 @@ export default class Selection
         this.HighlightedObject = {ifcObject:null}
         this.SelectedObjects = selectedObjectsList
         this.importedObjects = importedIfcObjects
-
+        this.intersection = null
         // Box selection
         this.renderer = renderer.instance
-        this.selection = new SelectionBox(this.camera, this.scene)
+        this.selection = new SelectionBox(this.camera.instance, this.scene)
         this.helper = new SelectionHelper(this.selection, this.renderer, 'selectBox')
         this.startFlag = false
         this.worker = new Worker('./Application/Utils/SelectionWorker.js')
@@ -68,17 +70,27 @@ export default class Selection
         // Computes the position of the mouse on the screen
 	    // calculate mouse position in normalized device coordinates
 	    // (-1 to +1) for both components
-	    tempMouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
-	    tempMouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1
+	    tempMouse.x =
+            ((event.clientX / window.innerWidth) - this.camera.x) * (2 * window.innerWidth/this.camera.width)- 1
+        tempMouse.y =
+            - ((event.clientY / window.innerHeight) - this.camera.y) * (2 * window.innerHeight/this.camera.height) + 1
         this.mouse = tempMouse
-    }
-
+     }
 
     Hover(event, material, object)
     {
         this.#UpdateMousePosition(event) 
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-
+        if (this.camera.instance instanceof OrthographicCamera)
+        {
+            cameraVector.set(this.mouse.x, this.mouse.y, -1);
+            cameraVector.unproject(this.camera.instance);
+            dir.set( 0, 0, - 1 ).transformDirection( this.camera.instance.matrixWorld );
+            this.raycaster.set(cameraVector, dir); 
+        }
+        else{
+            this.raycaster.setFromCamera(this.mouse, this.camera.instance);
+        }
+        
         // Removes previous highlight if any existed    
         if(object.ifcObject !== null)
         {
@@ -102,24 +114,8 @@ export default class Selection
 
     Select(event, material, add, selectAll)
     {
-        this.#UpdateMousePosition(event) 
-
-        // if(this.camera instanceof OrthographicCamera)
-        // {
-        //     this.raycaster.ray.origin.set(0, 0, 0)
-        //     this.camera.localToWorld(this.raycaster.ray.origin)
-        //     this.raycaster.setFromCamera(this.mouse, this.camera)
-        //     this.raycaster.ray.origin.z is this.camera.far
-        // }
-        // else
-        // {
-        this.raycaster.setFromCamera(this.mouse, this.camera)
-        //}
-        // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'))
-        const intersection = this.raycaster.intersectObjects(allowedIntersections, false)[0];
-
-        if(intersection != null && intersection.object.hasOwnProperty('modelObject'))
+        let intersection = this.HighlightedObject.ifcObject
+        if(intersection != null)
         {
             // if selection without addind, remove all previous selections
             if(!add)
@@ -134,14 +130,13 @@ export default class Selection
                 this.SelectedObjects.selectedObjectsList = []
             } 
 
-            let object = intersection.object.modelObject
             if (add && selectAll)
             {
                 // find all objects belonging to the same model
-                let modelObjects = this.importedObjects.ifcObjects.filter(e => e.modelId == object.modelId)
+                let modelObjects = this.importedObjects.ifcObjects.filter(e => e.modelId == intersection.modelId)
 
                 // filter only distinct objects (remove duplicates if any)
-                const repititions = this.SelectedObjects.selectedObjectsList.filter(e => e.modelId == object.modelId)
+                const repititions = this.SelectedObjects.selectedObjectsList.filter(e => e.modelId == intersection.modelId)
                 modelObjects = modelObjects.filter((e) => !repititions.includes(e))
                 // add to selection
                 for(const obj of modelObjects)
@@ -153,16 +148,16 @@ export default class Selection
                 }
             }
             // if selection is not repeated, proceed
-            else if (! this.SelectedObjects.selectedObjectsList.some(e => e.mesh.uuid == intersection.object.uuid))
+            else if (! this.SelectedObjects.selectedObjectsList.some(e => e.mesh.uuid == intersection.uuid))
             {
                 // highlight intersected object
-                object.select(material, this.scene)
+                intersection.select(material, this.scene)
                 // add to selected objects list
-                this.SelectedObjects.selectedObjectsList.push(object)
+                this.SelectedObjects.selectedObjectsList.push(intersection)
             }    
             else if (add) // to unselect already selected element when pressing shift
             {
-                const selectedOject = this.SelectedObjects.selectedObjectsList.filter(e => e.mesh.uuid == intersection.object.uuid)[0]
+                const selectedOject = this.SelectedObjects.selectedObjectsList.filter(e => e.mesh.uuid == intersection.uuid)[0]
                 const index = this.SelectedObjects.selectedObjectsList.indexOf(selectedOject); 
                 this.SelectedObjects.selectedObjectsList.splice(index, 1);
                 object.unselect(this.scene)
@@ -199,10 +194,10 @@ export default class Selection
                 instance.selectMaterial,
                 event.shiftKey? true:false,
                 instance.selectAll )
-          
+          instance.#UpdateMousePosition(event)
             instance.selection.startPoint.set(
-                (event.clientX / window.innerWidth) * 2 - 1,
-                -(event.clientY / window.innerHeight) * 2 + 1,
+                instance.mouse.x,
+                instance.mouse.y,
                 0.5);
             // start set(( event.clientX / window.innerWidth ) * 2 - 1,  -(event.clientY / window.innerHeight) * 2 + 1)
             // positions push(new Vector2(start.x, start.y))
@@ -223,10 +218,11 @@ export default class Selection
 
         if (event.button === 0 && instance.startFlag) 
         {
+            instance.#UpdateMousePosition(event);
             if (instance.helper.isDown) {
                 instance.selection.endPoint.set(
-                    (event.clientX / window.innerWidth) * 2 - 1,
-                    -(event.clientY / window.innerHeight) * 2 + 1,
+                    instance.mouse.x,
+                    instance.mouse.y,
                     0.5);
                     document.querySelectorAll(".selectBox").forEach(x => x.style.visibility = "visible")
             }
@@ -245,9 +241,10 @@ export default class Selection
     {
         if (event.button === 0 && instance.startFlag) 
         {
+            instance.#UpdateMousePosition(event);
             instance.selection.endPoint.set(
-                (event.clientX / window.innerWidth) * 2 - 1,
-                -(event.clientY / window.innerHeight) * 2 + 1,
+                instance.mouse.x,
+                instance.mouse.y,
                 0.5);
             let distance = instance.selection.endPoint.distanceTo(instance.selection.startPoint)
             if(distance > 0.1)

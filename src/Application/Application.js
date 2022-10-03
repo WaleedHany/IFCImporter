@@ -48,14 +48,15 @@ export default class Initialization
 
         // Scene
         this.scene = new THREE.Scene()
-        //this.scene.background new THREE.Color('#00ffff');
         this.resources = new InitialResources(sources)
         
-        // Camera
-        this.camera = new Camera(this.sizes, this.scene, this.canvas, this.renderer)
-        
+        // Cameras
+        this.camera = new Camera(this.sizes, this.scene, this.canvas)  
+        this.cameraList = []
+        this.cameraList.push(this.camera)
+            
         // Renderer
-        this.renderer = new Renderer(this.canvas, this.sizes, this.scene, this.camera)
+        this.renderer = new Renderer(this.canvas, this.sizes, this.scene, this, this.camera)
 
         // Time
         this.time = new Time()

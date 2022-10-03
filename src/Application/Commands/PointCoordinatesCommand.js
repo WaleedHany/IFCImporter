@@ -49,7 +49,7 @@ export default class PointCoordinatesCommand extends Command
 
     remove()
     {
-        this.Line.geometry.dispose()
+       // this.Line.geometry.dispose()
         this.text.geometry.dispose()
         this.text.material.dispose()
     }

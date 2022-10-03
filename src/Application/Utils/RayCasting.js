@@ -1,11 +1,13 @@
 import { Raycaster, Vector2, Vector3, Mesh, MeshBasicMaterial, 
          Triangle, PerspectiveCamera, RingGeometry, EdgesGeometry, 
-         BufferGeometry, Line, LineBasicMaterial} from "three";
+         BufferGeometry, Line, LineBasicMaterial, Camera} from "three";
 import EventEmitter from "./EventEmitter";
 
 const tempMouse = new Vector2()
 const canvas = document.querySelector('canvas.webgl')
 let instance = null
+let cameraVector = new Vector3();
+let dir = new Vector3();
 
 export default class RayCasting extends EventEmitter
 {  
@@ -19,7 +21,7 @@ export default class RayCasting extends EventEmitter
         }
         instance = this
 
-        this.camera = camera.instance
+        this.camera = camera
         this.scene = scene
 
         this.ifcLoader = ifcLoader
@@ -62,15 +64,26 @@ export default class RayCasting extends EventEmitter
         // Computes the position of the mouse on the screen
         // calculate mouse position in normalized device coordinates
         // (-1 to +1) for both components
-        tempMouse.x = ( event.clientX / window.innerWidth ) * 2 - 1
-        tempMouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1
+        tempMouse.x =
+            ((event.clientX / window.innerWidth) - this.camera.x) * (2 * window.innerWidth / this.camera.width) - 1;
+        tempMouse.y =
+            - ((event.clientY / window.innerHeight) - this.camera.y) * (2 * window.innerHeight / this.camera.height) + 1;
         this.mouse = tempMouse
     }
 
     Hover(event)
     {
         this.#UpdateMousePosition(event) 
-        this.raycaster.setFromCamera(this.mouse, this.camera);
+        if (this.camera.instance instanceof PerspectiveCamera)
+        {
+            this.raycaster.setFromCamera(this.mouse, this.camera.instance);         
+        }
+        else {
+            cameraVector.set(this.mouse.x, this.mouse.y, -1);
+            cameraVector.unproject(this.camera.instance);
+            dir.set( 0, 0, - 1 ).transformDirection( this.camera.instance.matrixWorld );
+            this.raycaster.set(cameraVector, dir); 
+        }
         // Cast a ray
         let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'))
         const intersection = this.raycaster.intersectObjects(allowedIntersections)[0];
@@ -85,16 +98,17 @@ export default class RayCasting extends EventEmitter
             if(point != null && intersection.point.distanceTo(point) < 0.3 && !this.selectLine)
             {
                this.marker.position.set(point.x, point.y, point.z)
-               this.marker.lookAt(this.camera.position)
                let Scale = 1
-               if(this.camera instanceof PerspectiveCamera)
+               if(this.camera.instance instanceof PerspectiveCamera)
                {
                    Scale = intersection.distance / 18
+                   this.marker.lookAt(this.camera.instance.position)
                }
                else
                {
-                   const scaleFactor = 3
-                   Scale = scaleFactor/this.camera.zoom
+                   const scaleFactor = 10
+                   Scale = scaleFactor / this.camera.instance.zoom
+                   this.marker.lookAt(cameraVector)
                }
                this.marker.scale.set(Scale, Scale, 1)
                this.scene.add(this.marker)
@@ -293,10 +307,10 @@ export default class RayCasting extends EventEmitter
         //  distance =  -----------------    
         //                  |x2-x1|
         //
-        var diff1 = new Vector3(0,0,0).subVectors(point, linePoint1)
-        var diff2 = new Vector3(0,0,0).subVectors(point, linePoint2)
-        var cross = new Vector3(0,0,0).crossVectors(diff1, diff2)
-        var diff3 = new Vector3(0,0,0).subVectors(linePoint2, linePoint1)
+        let diff1 = new Vector3(0,0,0).subVectors(point, linePoint1)
+        let diff2 = new Vector3(0,0,0).subVectors(point, linePoint2)
+        let cross = new Vector3(0,0,0).crossVectors(diff1, diff2)
+        let diff3 = new Vector3(0,0,0).subVectors(linePoint2, linePoint1)
         return cross.length() / diff3.length()
     }
 

@@ -50635,1432 +50635,6 @@ class Time extends EventEmitter
     }
 }
 
-/**
- * @author qiao / https://github.com/qiao
- * @author mrdoob / http://mrdoob.com
- * @author alteredq / http://alteredqualia.com/
- * @author WestLangley / http://github.com/WestLangley
- * @author erich666 / http://erichaines.com
- * @author ScieCode / http://github.com/sciecode
- */
-
-// This set of controls performs orbiting, dollying (zooming), and panning.
-// Unlike TrackballControls, it maintains the "up" direction object.up (+Y by default).
-//
-//    Orbit - left mouse / touch: one-finger move
-//    Zoom - middle mouse, or mousewheel / touch: two-finger spread or squish
-//    Pan - right mouse, or left mouse + ctrl/meta/shiftKey, or arrow keys / touch: two-finger move
-
-var OrbitControls = function ( object, domElement ) {
-
-	this.object = object;
-
-	this.domElement = ( domElement !== undefined ) ? domElement : document;
-
-	// Set to false to disable this control
-	this.enabled = true;
-
-	// "target" sets the location of focus, where the object orbits around
-	this.target = new Vector3();
-
-	// How far you can dolly in and out ( PerspectiveCamera only )
-	this.minDistance = 0;
-	this.maxDistance = Infinity;
-
-	// How far you can zoom in and out ( OrthographicCamera only )
-	this.minZoom = 0;
-	this.maxZoom = Infinity;
-
-	// How far you can orbit vertically, upper and lower limits.
-	// Range is 0 to Math.PI radians.
-	this.minPolarAngle = 0; // radians
-	this.maxPolarAngle = Math.PI; // radians
-
-	// How far you can orbit horizontally, upper and lower limits.
-	// If set, must be a sub-interval of the interval [ - Math.PI, Math.PI ].
-	this.minAzimuthAngle = - Infinity; // radians
-	this.maxAzimuthAngle = Infinity; // radians
-
-	// Set to true to enable damping (inertia)
-	// If damping is enabled, you must call controls.update() in your animation loop
-	this.enableDamping = false;
-	this.dampingFactor = 0.05;
-
-	// This option actually enables dollying in and out; left as "zoom" for backwards compatibility.
-	// Set to false to disable zooming
-	this.enableZoom = true;
-	this.zoomSpeed = 0.8;
-
-	// Set to true to zoom to cursor // panning may have to be enabled... // does it make sense for orbit controls?
-	this.zoomToCursor = false;
-
-	// Set to false to disable rotating
-	this.enableRotate = true;
-	this.rotateSpeed = 1.0;
-
-	// Set to false to disable panning
-	this.enablePan = true;
-	this.panSpeed = 1.0;
-	this.screenSpacePanning = false; // if true, pan in screen-space
-	this.keyPanSpeed = 7.0;	// pixels moved per arrow key push
-
-	// Set to true to automatically rotate around the target
-	// If auto-rotate is enabled, you must call controls.update() in your animation loop
-	this.autoRotate = false;
-	this.autoRotateSpeed = 2.0; // 30 seconds per round when fps is 60
-
-	// Set to false to disable use of the keys
-	this.enableKeys = true;
-
-	// The four arrow keys
-	this.keys = { LEFT: 37, UP: 38, RIGHT: 39, BOTTOM: 40 };
-
-	// Mouse buttons
-	this.mouseButtons = { MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }; //LEFT: MOUSE.ROTATE, 
-
-	// Touch fingers
-	this.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
-
-	// for reset
-	this.target0 = this.target.clone();
-	this.position0 = this.object.position.clone();
-	this.zoom0 = this.object.zoom;
-
-	//
-	// public methods
-	//
-
-	this.getPolarAngle = function () {
-
-		return spherical.phi;
-
-	};
-
-	this.getAzimuthalAngle = function () {
-
-		return spherical.theta;
-
-	};
-
-	this.saveState = function () {
-
-		scope.target0.copy( scope.target );
-		scope.position0.copy( scope.object.position );
-		scope.zoom0 = scope.object.zoom;
-
-	};
-
-	this.reset = function () {
-
-		scope.target.copy( scope.target0 );
-		scope.object.position.copy( scope.position0 );
-		scope.object.zoom = scope.zoom0;
-
-		scope.object.updateProjectionMatrix();
-		scope.dispatchEvent( changeEvent );
-
-		scope.update();
-
-		state = STATE.NONE;
-
-	};
-
-	// this method is exposed, but perhaps it would be better if we can make it private...
-	this.update = function () {
-
-		var offset = new Vector3();
-
-		// so camera.up is the orbit axis
-		var quat = new Quaternion().setFromUnitVectors( object.up, new Vector3( 0, 1, 0 ) );
-		var quatInverse = quat.clone().invert();
-
-		var lastPosition = new Vector3();
-		var lastQuaternion = new Quaternion();
-
-		return function update() {
-
-			var position = scope.object.position;
-
-			offset.copy( position ).sub( scope.target );
-
-			// rotate offset to "y-axis-is-up" space
-			offset.applyQuaternion( quat );
-
-			// angle from z-axis around y-axis
-			spherical.setFromVector3( offset );
-
-			if ( scope.autoRotate && state === STATE.NONE ) {
-
-				rotateLeft( getAutoRotationAngle() );
-
-			}
-
-			if ( scope.enableDamping ) {
-
-				spherical.theta += sphericalDelta.theta * scope.dampingFactor;
-				spherical.phi += sphericalDelta.phi * scope.dampingFactor;
-
-			} else {
-
-				spherical.theta += sphericalDelta.theta;
-				spherical.phi += sphericalDelta.phi;
-
-			}
-
-			// restrict theta to be between desired limits
-			spherical.theta = Math.max( scope.minAzimuthAngle, Math.min( scope.maxAzimuthAngle, spherical.theta ) );
-
-			// restrict phi to be between desired limits
-			spherical.phi = Math.max( scope.minPolarAngle, Math.min( scope.maxPolarAngle, spherical.phi ) );
-
-			spherical.makeSafe();
-
-			var prevRadius = spherical.radius;
-			spherical.radius *= scale;
-
-			// restrict radius to be between desired limits
-			spherical.radius = Math.max( scope.minDistance, Math.min( scope.maxDistance, spherical.radius ) );
-
-			// move target to panned location
-
-			if ( scope.enableDamping === true ) {
-
-				scope.target.addScaledVector( panOffset, scope.dampingFactor );
-
-			} else {
-
-				scope.target.add( panOffset );
-
-			}
-
-			// suport zoomToCursor (mouse only)
-
-			if ( scope.zoomToCursor ) {
-
-				if ( scope.object.isPerspectiveCamera ) {
-
-					scope.target.lerp( mouse3D, 1 - spherical.radius / prevRadius );
-
-				} else if ( scope.object.isOrthographicCamera ) {
-
-					scope.target.lerp( mouse3D, 1 - zoomFactor );
-
-				}
-
-			}
-
-			offset.setFromSpherical( spherical );
-
-			// rotate offset back to "camera-up-vector-is-up" space
-			offset.applyQuaternion( quatInverse );
-
-			position.copy( scope.target ).add( offset );
-
-			scope.object.lookAt( scope.target );
-
-			if ( scope.enableDamping === true ) {
-
-				sphericalDelta.theta *= ( 1 - scope.dampingFactor );
-				sphericalDelta.phi *= ( 1 - scope.dampingFactor );
-
-				panOffset.multiplyScalar( 1 - scope.dampingFactor );
-
-			} else {
-
-				sphericalDelta.set( 0, 0, 0 );
-
-				panOffset.set( 0, 0, 0 );
-
-			}
-
-			scale = 1;
-
-			// update condition is:
-			// min(camera displacement, camera rotation in radians)^2 > EPS
-			// using small-angle approximation cos(x/2) = 1 - x^2 / 8
-
-			if ( zoomChanged ||
-				lastPosition.distanceToSquared( scope.object.position ) > EPS ||
-				8 * ( 1 - lastQuaternion.dot( scope.object.quaternion ) ) > EPS ) {
-
-				scope.dispatchEvent( changeEvent );
-
-				lastPosition.copy( scope.object.position );
-				lastQuaternion.copy( scope.object.quaternion );
-				zoomChanged = false;
-				zoomFactor = 1;
-
-				return true;
-
-			}
-
-			return false;
-
-		};
-
-	}();
-
-	this.dispose = function () {
-
-		scope.domElement.removeEventListener( 'contextmenu', onContextMenu, false );
-		scope.domElement.removeEventListener( 'mousedown', onMouseDown, false );
-		scope.domElement.removeEventListener( 'wheel', onMouseWheel, false );
-
-		scope.domElement.removeEventListener( 'touchstart', onTouchStart, false );
-		scope.domElement.removeEventListener( 'touchend', onTouchEnd, false );
-		scope.domElement.removeEventListener( 'touchmove', onTouchMove, false );
-
-		document.removeEventListener( 'mousemove', onMouseMove, false );
-		document.removeEventListener( 'mouseup', onMouseUp, false );
-
-		window.removeEventListener( 'keydown', onKeyDown, false );
-
-		//scope.dispatchEvent( { type: 'dispose' } ); // should this be added here?
-
-	};
-
-	//
-	// internals
-	//
-
-	var scope = this;
-
-	var changeEvent = { type: 'change' };
-	var startEvent = { type: 'start' };
-	var endEvent = { type: 'end' };
-
-	var STATE = {
-		NONE: - 1,
-		ROTATE: 0,
-		DOLLY: 1,
-		PAN: 2,
-		TOUCH_ROTATE: 3,
-		TOUCH_PAN: 4,
-		TOUCH_DOLLY_PAN: 5,
-		TOUCH_DOLLY_ROTATE: 6
-	};
-
-	var state = STATE.NONE;
-
-	var EPS = 0.000001;
-
-	// current position in spherical coordinates
-	var spherical = new Spherical();
-	var sphericalDelta = new Spherical();
-
-	var scale = 1;
-	var panOffset = new Vector3();
-	var zoomChanged = false;
-	var zoomFactor = 1;
-
-	var rotateStart = new Vector2();
-	var rotateEnd = new Vector2();
-	var rotateDelta = new Vector2();
-
-	var panStart = new Vector2();
-	var panEnd = new Vector2();
-	var panDelta = new Vector2();
-
-	var dollyStart = new Vector2();
-	var dollyEnd = new Vector2();
-	var dollyDelta = new Vector2();
-
-	var mouse3D = new Vector3();
-
-	function getAutoRotationAngle() {
-
-		return 2 * Math.PI / 60 / 60 * scope.autoRotateSpeed;
-
-	}
-
-	function getZoomScale() {
-
-		return Math.pow( 0.95, scope.zoomSpeed );
-
-	}
-
-	function rotateLeft( angle ) {
-
-		sphericalDelta.theta -= angle;
-
-	}
-
-	function rotateUp( angle ) {
-
-		sphericalDelta.phi -= angle;
-
-	}
-
-	var panLeft = function () {
-
-		var v = new Vector3();
-
-		return function panLeft( distance, objectMatrix ) {
-
-			v.setFromMatrixColumn( objectMatrix, 0 ); // get X column of objectMatrix
-			v.multiplyScalar( - distance );
-
-			panOffset.add( v );
-
-		};
-
-	}();
-
-	var panUp = function () {
-
-		var v = new Vector3();
-
-		return function panUp( distance, objectMatrix ) {
-
-			if ( scope.screenSpacePanning === true ) {
-
-				v.setFromMatrixColumn( objectMatrix, 1 );
-
-			} else {
-
-				v.setFromMatrixColumn( objectMatrix, 0 );
-				v.crossVectors( scope.object.up, v );
-
-			}
-
-			v.multiplyScalar( distance );
-
-			panOffset.add( v );
-
-		};
-
-	}();
-
-	// deltaX and deltaY are in pixels; right and down are positive
-	var pan = function () {
-
-		var offset = new Vector3();
-
-		return function pan( deltaX, deltaY ) {
-
-			var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
-
-			if ( scope.object.isPerspectiveCamera ) {
-
-				// perspective
-				var position = scope.object.position;
-				offset.copy( position ).sub( scope.target );
-				var targetDistance = offset.length();
-
-				// half of the fov is center to top of screen
-				targetDistance *= Math.tan( ( scope.object.fov / 2 ) * Math.PI / 180.0 );
-
-				// we use only clientHeight here so aspect ratio does not distort speed
-				panLeft( 2 * deltaX * targetDistance / element.clientHeight, scope.object.matrix );
-				panUp( 2 * deltaY * targetDistance / element.clientHeight, scope.object.matrix );
-
-			} else if ( scope.object.isOrthographicCamera ) {
-
-				// orthographic
-				panLeft( deltaX * ( scope.object.right - scope.object.left ) / scope.object.zoom / element.clientWidth, scope.object.matrix );
-				panUp( deltaY * ( scope.object.top - scope.object.bottom ) / scope.object.zoom / element.clientHeight, scope.object.matrix );
-
-			} else {
-
-				// camera neither orthographic nor perspective
-				console.warn( 'WARNING: OrbitControls.js encountered an unknown camera type - pan disabled.' );
-				scope.enablePan = false;
-
-			}
-
-		};
-
-	}();
-
-	function dollyIn( dollyScale ) {
-
-		if ( scope.object.isPerspectiveCamera ) {
-
-			scale /= dollyScale;
-
-		} else if ( scope.object.isOrthographicCamera ) {
-
-			zoomFactor = scope.object.zoom;
-			scope.object.zoom = Math.max( scope.minZoom, Math.min( scope.maxZoom, scope.object.zoom * dollyScale ) );
-			zoomFactor /= scope.object.zoom;
-			scope.object.updateProjectionMatrix();
-			zoomChanged = true;
-
-		} else {
-
-			console.warn( 'WARNING: OrbitControls.js encountered an unknown camera type - dolly/zoom disabled.' );
-			scope.enableZoom = false;
-
-		}
-
-	}
-
-	function dollyOut( dollyScale ) {
-
-		if ( scope.object.isPerspectiveCamera ) {
-
-			scale *= dollyScale;
-
-		} else if ( scope.object.isOrthographicCamera ) {
-
-			zoomFactor = scope.object.zoom;
-			scope.object.zoom = Math.max( scope.minZoom, Math.min( scope.maxZoom, scope.object.zoom / dollyScale ) );
-			zoomFactor /= scope.object.zoom;
-			scope.object.updateProjectionMatrix();
-			zoomChanged = true;
-
-		} else {
-
-			console.warn( 'WARNING: OrbitControls.js encountered an unknown camera type - dolly/zoom disabled.' );
-			scope.enableZoom = false;
-
-		}
-
-	}
-
-	//
-	// event callbacks - update the object state
-	//
-
-	function handleMouseDownRotate( event ) {
-
-		//console.log( 'handleMouseDownRotate' );
-
-		rotateStart.set( event.clientX, event.clientY );
-
-	}
-
-	function handleMouseDownDolly( event ) {
-
-		//console.log( 'handleMouseDownDolly' );
-
-		dollyStart.set( event.clientX, event.clientY );
-
-	}
-
-	function handleMouseDownPan( event ) {
-
-		//console.log( 'handleMouseDownPan' );
-
-		panStart.set( event.clientX, event.clientY );
-
-	}
-
-	function handleMouseMoveRotate( event ) {
-
-		//console.log( 'handleMouseMoveRotate' );
-
-		rotateEnd.set( event.clientX, event.clientY );
-
-		rotateDelta.subVectors( rotateEnd, rotateStart ).multiplyScalar( scope.rotateSpeed );
-
-		var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
-
-		rotateLeft( 2 * Math.PI * rotateDelta.x / element.clientHeight ); // yes, height
-
-		rotateUp( 2 * Math.PI * rotateDelta.y / element.clientHeight );
-
-		rotateStart.copy( rotateEnd );
-
-		scope.update();
-
-	}
-
-	function handleMouseMoveDolly( event ) {
-
-		//console.log( 'handleMouseMoveDolly' );
-
-		dollyEnd.set( event.clientX, event.clientY );
-
-		dollyDelta.subVectors( dollyEnd, dollyStart );
-
-		if ( dollyDelta.y > 0 ) {
-
-			dollyIn( getZoomScale() ); // fix - set mouse3D - dragging with middle mouse button
-
-		} else if ( dollyDelta.y < 0 ) {
-
-			dollyOut( getZoomScale() );
-
-		}
-
-		dollyStart.copy( dollyEnd );
-
-		scope.update();
-
-	}
-
-	function handleMouseMovePan( event ) {
-
-		//console.log( 'handleMouseMovePan' );
-
-		panEnd.set( event.clientX, event.clientY );
-
-		panDelta.subVectors( panEnd, panStart ).multiplyScalar( scope.panSpeed );
-
-		pan( panDelta.x, panDelta.y );
-
-		panStart.copy( panEnd );
-
-		scope.update();
-
-	}
-
-	var updateMouse3D = function () {
-
-		var v = new Vector3();
-		var v1 = new Vector3();
-
-		return function updateMouse3D( event ) {
-
-			var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
-
-			if ( scope.object.isPerspectiveCamera ) {
-
-				v.set(
-				    ( event.clientX / element.clientWidth ) * 2 - 1,
-				    - ( event.clientY / element.clientHeight ) * 2 + 1,
-				    0.5 );
-
-				v.unproject( scope.object );
-
-				v.sub( scope.object.position ).normalize();
-
-				var distance = v1.copy( scope.target ).sub( scope.object.position ).dot( scope.object.up ) / v.dot( scope.object.up );
-
-				mouse3D.copy( scope.object.position ).add( v.multiplyScalar( distance ) );
-
-			} else if ( scope.object.isOrthographicCamera ) {
-
-				v.set(
-				    ( event.clientX / element.clientWidth ) * 2 - 1,
-				    - ( event.clientY / element.clientHeight ) * 2 + 1,
-				    ( scope.object.near + scope.object.far ) / ( scope.object.near - scope.object.far ) );
-
-				v.unproject( scope.object );
-
-				v1.set( 0, 0, - 1 ).applyQuaternion( scope.object.quaternion );
-
-				var distance = - v.dot( scope.object.up ) / v1.dot( scope.object.up );
-
-				mouse3D.copy( v ).add( v1.multiplyScalar( distance ) );
-
-			} else {
-
-				// camera neither orthographic nor perspective
-				console.warn( 'WARNING: OrbitControls.js encountered an unknown camera type.' );
-
-			}
-
-			//console.log( mouse3D );
-
-		};
-
-	}();
-
-	function handleMouseWheel( event ) {
-
-		// console.log( 'handleMouseWheel' );
-
-		updateMouse3D( event );
-
-		if ( event.deltaY < 0 ) {
-
-			dollyOut( getZoomScale() );
-
-		} else if ( event.deltaY > 0 ) {
-
-			dollyIn( getZoomScale() );
-
-		}
-
-		scope.update();
-
-	}
-
-	function handleKeyDown( event ) {
-
-		// console.log( 'handleKeyDown' );
-
-		var needsUpdate = false;
-
-		switch ( event.keyCode ) {
-
-			case scope.keys.UP:
-				pan( 0, scope.keyPanSpeed );
-				needsUpdate = true;
-				break;
-
-			case scope.keys.BOTTOM:
-				pan( 0, - scope.keyPanSpeed );
-				needsUpdate = true;
-				break;
-
-			case scope.keys.LEFT:
-				pan( scope.keyPanSpeed, 0 );
-				needsUpdate = true;
-				break;
-
-			case scope.keys.RIGHT:
-				pan( - scope.keyPanSpeed, 0 );
-				needsUpdate = true;
-				break;
-
-		}
-
-		if ( needsUpdate ) {
-
-			// prevent the browser from scrolling on cursor keys
-			event.preventDefault();
-
-			scope.update();
-
-		}
-
-
-	}
-
-	function handleTouchStartRotate( event ) {
-
-		//console.log( 'handleTouchStartRotate' );
-
-		if ( event.touches.length == 1 ) {
-
-			rotateStart.set( event.touches[ 0 ].pageX, event.touches[ 0 ].pageY );
-
-		} else {
-
-			var x = 0.5 * ( event.touches[ 0 ].pageX + event.touches[ 1 ].pageX );
-			var y = 0.5 * ( event.touches[ 0 ].pageY + event.touches[ 1 ].pageY );
-
-			rotateStart.set( x, y );
-
-		}
-
-	}
-
-	function handleTouchStartPan( event ) {
-
-		//console.log( 'handleTouchStartPan' );
-
-		if ( event.touches.length == 1 ) {
-
-			panStart.set( event.touches[ 0 ].pageX, event.touches[ 0 ].pageY );
-
-		} else {
-
-			var x = 0.5 * ( event.touches[ 0 ].pageX + event.touches[ 1 ].pageX );
-			var y = 0.5 * ( event.touches[ 0 ].pageY + event.touches[ 1 ].pageY );
-
-			panStart.set( x, y );
-
-		}
-
-	}
-
-	function handleTouchStartDolly( event ) {
-
-		//console.log( 'handleTouchStartDolly' );
-
-		var dx = event.touches[ 0 ].pageX - event.touches[ 1 ].pageX;
-		var dy = event.touches[ 0 ].pageY - event.touches[ 1 ].pageY;
-
-		var distance = Math.sqrt( dx * dx + dy * dy );
-
-		dollyStart.set( 0, distance );
-
-	}
-
-	function handleTouchStartDollyPan( event ) {
-
-		//console.log( 'handleTouchStartDollyPan' );
-
-		if ( scope.enableZoom ) handleTouchStartDolly( event );
-
-		if ( scope.enablePan ) handleTouchStartPan( event );
-
-	}
-
-	function handleTouchStartDollyRotate( event ) {
-
-		//console.log( 'handleTouchStartDollyRotate' );
-
-		if ( scope.enableZoom ) handleTouchStartDolly( event );
-
-		if ( scope.enableRotate ) handleTouchStartRotate( event );
-
-	}
-
-	function handleTouchMoveRotate( event ) {
-
-		//console.log( 'handleTouchMoveRotate' );
-
-		if ( event.touches.length == 1 ) {
-
-			rotateEnd.set( event.touches[ 0 ].pageX, event.touches[ 0 ].pageY );
-
-		} else {
-
-			var x = 0.5 * ( event.touches[ 0 ].pageX + event.touches[ 1 ].pageX );
-			var y = 0.5 * ( event.touches[ 0 ].pageY + event.touches[ 1 ].pageY );
-
-			rotateEnd.set( x, y );
-
-		}
-
-		rotateDelta.subVectors( rotateEnd, rotateStart ).multiplyScalar( scope.rotateSpeed );
-
-		var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
-
-		rotateLeft( 2 * Math.PI * rotateDelta.x / element.clientHeight ); // yes, height
-
-		rotateUp( 2 * Math.PI * rotateDelta.y / element.clientHeight );
-
-		rotateStart.copy( rotateEnd );
-
-	}
-
-	function handleTouchMovePan( event ) {
-
-		//console.log( 'handleTouchMoveRotate' );
-
-		if ( event.touches.length == 1 ) {
-
-			panEnd.set( event.touches[ 0 ].pageX, event.touches[ 0 ].pageY );
-
-		} else {
-
-			var x = 0.5 * ( event.touches[ 0 ].pageX + event.touches[ 1 ].pageX );
-			var y = 0.5 * ( event.touches[ 0 ].pageY + event.touches[ 1 ].pageY );
-
-			panEnd.set( x, y );
-
-		}
-
-		panDelta.subVectors( panEnd, panStart ).multiplyScalar( scope.panSpeed );
-
-		pan( panDelta.x, panDelta.y );
-
-		panStart.copy( panEnd );
-
-	}
-
-	function handleTouchMoveDolly( event ) {
-
-		//console.log( 'handleTouchMoveRotate' );
-
-		var dx = event.touches[ 0 ].pageX - event.touches[ 1 ].pageX;
-		var dy = event.touches[ 0 ].pageY - event.touches[ 1 ].pageY;
-
-		var distance = Math.sqrt( dx * dx + dy * dy );
-
-		dollyEnd.set( 0, distance );
-
-		dollyDelta.set( 0, Math.pow( dollyEnd.y / dollyStart.y, scope.zoomSpeed ) );
-
-		dollyIn( dollyDelta.y ); // fix - set mouse3D for zoom to cursor
-
-		dollyStart.copy( dollyEnd );
-
-	}
-
-	function handleTouchMoveDollyPan( event ) {
-
-		//console.log( 'handleTouchMoveDollyPan' );
-
-		if ( scope.enableZoom ) handleTouchMoveDolly( event );
-
-		if ( scope.enablePan ) handleTouchMovePan( event );
-
-	}
-
-	function handleTouchMoveDollyRotate( event ) {
-
-		//console.log( 'handleTouchMoveDollyPan' );
-
-		if ( scope.enableZoom ) handleTouchMoveDolly( event );
-
-		if ( scope.enableRotate ) handleTouchMoveRotate( event );
-
-	}
-
-	//
-	// event handlers - FSM: listen for events and reset state
-	//
-
-	function onMouseDown( event ) {
-
-		if ( scope.enabled === false ) return;
-
-		// Prevent the browser from scrolling.
-
-		event.preventDefault();
-
-		// Manually set the focus since calling preventDefault above
-		// prevents the browser from setting it automatically.
-
-		scope.domElement.focus ? scope.domElement.focus() : window.focus();
-
-		switch ( event.button ) {
-
-			case 0:
-
-				switch ( scope.mouseButtons.LEFT ) {
-
-					case MOUSE.ROTATE:
-
-						if ( event.ctrlKey || event.metaKey || event.shiftKey ) {
-							
-							if ( scope.enableRotate === false ) return;
-
-							handleMouseDownRotate( event );
-							state = STATE.ROTATE;
-
-						 } 
-
-						break;
-
-					case MOUSE.PAN:
-
-						if ( event.ctrlKey || event.metaKey || event.shiftKey ) {
-
-							if ( scope.enableRotate === false ) return;
-
-							handleMouseDownRotate( event );
-
-							state = STATE.ROTATE;
-
-						} else {
-
-							if ( scope.enablePan === false ) return;
-
-							handleMouseDownPan( event );
-
-							state = STATE.PAN;
-
-						}
-
-						break;
-
-					default:
-
-						state = STATE.NONE;
-
-				}
-
-				break;
-
-
-			case 1:
-
-				switch ( scope.mouseButtons.MIDDLE ) {
-					case MOUSE.ROTATE:
-
-						if ( event.ctrlKey || event.metaKey || event.shiftKey ) {
-							
-							if ( scope.enableRotate === false ) return;
-
-							handleMouseDownRotate( event );
-							state = STATE.ROTATE;
-
-						 } 
-
-						break;
-
-					case MOUSE.DOLLY:
-						if ( event.ctrlKey || event.metaKey || event.shiftKey ) 
-						{
-							if ( scope.enableZoom === false ) return;
-							handleMouseDownDolly( event );
-							state = STATE.DOLLY;	
-						 } 
-						 else
-						 {
-							if ( scope.enableRotate === false ) return;
-							handleMouseDownRotate( event );
-							state = STATE.ROTATE;
-						 }
-						break;
-
-
-					default:
-						state = STATE.NONE;
-				}
-
-				break;
-
-			case 2:
-
-				switch ( scope.mouseButtons.RIGHT ) {
-
-					case MOUSE.ROTATE:
-
-						if ( event.ctrlKey || event.metaKey || event.shiftKey ) {
-							
-							if ( scope.enableRotate === false ) return;
-
-							handleMouseDownRotate( event );
-							state = STATE.ROTATE;
-
-						 } 
-
-						break;
-
-					case MOUSE.PAN:
-
-						if ( event.ctrlKey || event.metaKey || event.shiftKey ) {
-							
-							if ( scope.enableRotate === false ) return;
-
-							handleMouseDownRotate( event );
-							state = STATE.ROTATE;
-
-						 } 
-						 else
-						 {
-							if ( scope.enablePan === false ) return;
-
-							handleMouseDownPan( event );
-	
-							state = STATE.PAN;
-						 }
-						
-
-						break;
-
-					default:
-
-						state = STATE.NONE;
-
-				}
-
-				break;
-
-		}
-
-		if ( state !== STATE.NONE ) {
-
-			document.addEventListener( 'mousemove', onMouseMove, false );
-			document.addEventListener( 'mouseup', onMouseUp, false );
-
-			scope.dispatchEvent( startEvent );
-
-		}
-
-	}
-
-	function onMouseMove( event ) {
-
-		if ( scope.enabled === false ) return;
-
-		event.preventDefault();
-
-		switch ( state ) {
-
-			case STATE.ROTATE:
-
-				if ( scope.enableRotate === false ) return;
-
-				handleMouseMoveRotate( event );
-
-				break;
-
-			case STATE.DOLLY:
-
-				if ( scope.enableZoom === false ) return;
-
-				handleMouseMoveDolly( event ); // fix zoom to cursor - dragging with middle mouse button - could be from alt key???
-
-				break;
-
-			case STATE.PAN:
-
-				if ( scope.enablePan === false ) return;
-
-				handleMouseMovePan( event );
-
-				break;
-
-		}
-
-	}
-
-	function onMouseUp( event ) {
-
-		if ( scope.enabled === false ) return;
-
-		document.removeEventListener( 'mousemove', onMouseMove, false );
-		document.removeEventListener( 'mouseup', onMouseUp, false );
-
-		scope.dispatchEvent( endEvent );
-
-		state = STATE.NONE;
-
-	}
-
-	function onMouseWheel( event ) {
-
-		if ( scope.enabled === false || scope.enableZoom === false || ( state !== STATE.NONE && state !== STATE.ROTATE ) ) return;
-
-		event.preventDefault();
-		event.stopPropagation();
-
-		scope.dispatchEvent( startEvent );
-
-		handleMouseWheel( event );
-
-		scope.dispatchEvent( endEvent );
-
-	}
-
-	function onKeyDown( event ) {
-
-		if ( scope.enabled === false || scope.enableKeys === false || scope.enablePan === false ) return;
-
-		handleKeyDown( event );
-
-	}
-
-	function onTouchStart( event ) {
-
-		if ( scope.enabled === false ) return;
-
-		event.preventDefault();
-
-		switch ( event.touches.length ) {
-
-			case 1:
-
-				switch ( scope.touches.ONE ) {
-
-					case TOUCH.ROTATE:
-
-						if ( scope.enableRotate === false ) return;
-
-						handleTouchStartRotate( event );
-
-						state = STATE.TOUCH_ROTATE;
-
-						break;
-
-					case TOUCH.PAN:
-
-						if ( scope.enablePan === false ) return;
-
-						handleTouchStartPan( event );
-
-						state = STATE.TOUCH_PAN;
-
-						break;
-
-					default:
-
-						state = STATE.NONE;
-
-				}
-
-				break;
-
-			case 2:
-
-				switch ( scope.touches.TWO ) {
-
-					case TOUCH.DOLLY_PAN:
-
-						if ( scope.enableZoom === false && scope.enablePan === false ) return;
-
-						handleTouchStartDollyPan( event );
-
-						state = STATE.TOUCH_DOLLY_PAN;
-
-						break;
-
-					case TOUCH.DOLLY_ROTATE:
-
-						if ( scope.enableZoom === false && scope.enableRotate === false ) return;
-
-						handleTouchStartDollyRotate( event );
-
-						state = STATE.TOUCH_DOLLY_ROTATE;
-
-						break;
-
-					default:
-
-						state = STATE.NONE;
-
-				}
-
-				break;
-
-			default:
-
-				state = STATE.NONE;
-
-		}
-
-		if ( state !== STATE.NONE ) {
-
-			scope.dispatchEvent( startEvent );
-
-		}
-
-	}
-
-	function onTouchMove( event ) {
-
-		if ( scope.enabled === false ) return;
-
-		event.preventDefault();
-		event.stopPropagation();
-
-		switch ( state ) {
-
-			case STATE.TOUCH_ROTATE:
-
-				if ( scope.enableRotate === false ) return;
-
-				handleTouchMoveRotate( event );
-
-				scope.update();
-
-				break;
-
-			case STATE.TOUCH_PAN:
-
-				if ( scope.enablePan === false ) return;
-
-				handleTouchMovePan( event );
-
-				scope.update();
-
-				break;
-
-			case STATE.TOUCH_DOLLY_PAN:
-
-				if ( scope.enableZoom === false && scope.enablePan === false ) return;
-
-				handleTouchMoveDollyPan( event );
-
-				scope.update();
-
-				break;
-
-			case STATE.TOUCH_DOLLY_ROTATE:
-
-				if ( scope.enableZoom === false && scope.enableRotate === false ) return;
-
-				handleTouchMoveDollyRotate( event );
-
-				scope.update();
-
-				break;
-
-			default:
-
-				state = STATE.NONE;
-
-		}
-
-	}
-
-	function onTouchEnd( event ) {
-
-		if ( scope.enabled === false ) return;
-
-		scope.dispatchEvent( endEvent );
-
-		state = STATE.NONE;
-
-	}
-
-	function onContextMenu( event ) {
-
-		if ( scope.enabled === false ) return;
-
-		event.preventDefault();
-
-	}
-
-	//
-
-	scope.domElement.addEventListener( 'contextmenu', onContextMenu, false );
-
-	scope.domElement.addEventListener( 'mousedown', onMouseDown, false );
-	scope.domElement.addEventListener( 'wheel', onMouseWheel, false );
-
-	scope.domElement.addEventListener( 'touchstart', onTouchStart, false );
-	scope.domElement.addEventListener( 'touchend', onTouchEnd, false );
-	scope.domElement.addEventListener( 'touchmove', onTouchMove, false );
-
-	window.addEventListener( 'keydown', onKeyDown, false );
-
-	// force an update at start
-
-	this.update();
-
-};
-
-OrbitControls.prototype = Object.create( EventDispatcher$1.prototype );
-OrbitControls.prototype.constructor = OrbitControls;
-
-Object.defineProperties( OrbitControls.prototype, {
-
-	center: {
-
-		get: function () {
-
-			console.warn( 'THREE.OrbitControls: .center has been renamed to .target' );
-			return this.target;
-
-		}
-
-	},
-
-	// backward compatibility
-
-	noZoom: {
-
-		get: function () {
-
-			console.warn( 'THREE.OrbitControls: .noZoom has been deprecated. Use .enableZoom instead.' );
-			return ! this.enableZoom;
-
-		},
-
-		set: function ( value ) {
-
-			console.warn( 'THREE.OrbitControls: .noZoom has been deprecated. Use .enableZoom instead.' );
-			this.enableZoom = ! value;
-
-		}
-
-	},
-
-	noRotate: {
-
-		get: function () {
-
-			console.warn( 'THREE.OrbitControls: .noRotate has been deprecated. Use .enableRotate instead.' );
-			return ! this.enableRotate;
-
-		},
-
-		set: function ( value ) {
-
-			console.warn( 'THREE.OrbitControls: .noRotate has been deprecated. Use .enableRotate instead.' );
-			this.enableRotate = ! value;
-
-		}
-
-	},
-
-	noPan: {
-
-		get: function () {
-
-			console.warn( 'THREE.OrbitControls: .noPan has been deprecated. Use .enablePan instead.' );
-			return ! this.enablePan;
-
-		},
-
-		set: function ( value ) {
-
-			console.warn( 'THREE.OrbitControls: .noPan has been deprecated. Use .enablePan instead.' );
-			this.enablePan = ! value;
-
-		}
-
-	},
-
-	noKeys: {
-
-		get: function () {
-
-			console.warn( 'THREE.OrbitControls: .noKeys has been deprecated. Use .enableKeys instead.' );
-			return ! this.enableKeys;
-
-		},
-
-		set: function ( value ) {
-
-			console.warn( 'THREE.OrbitControls: .noKeys has been deprecated. Use .enableKeys instead.' );
-			this.enableKeys = ! value;
-
-		}
-
-	},
-
-	staticMoving: {
-
-		get: function () {
-
-			console.warn( 'THREE.OrbitControls: .staticMoving has been deprecated. Use .enableDamping instead.' );
-			return ! this.enableDamping;
-
-		},
-
-		set: function ( value ) {
-
-			console.warn( 'THREE.OrbitControls: .staticMoving has been deprecated. Use .enableDamping instead.' );
-			this.enableDamping = ! value;
-
-		}
-
-	},
-
-	dynamicDampingFactor: {
-
-		get: function () {
-
-			console.warn( 'THREE.OrbitControls: .dynamicDampingFactor has been renamed. Use .dampingFactor instead.' );
-			return this.dampingFactor;
-
-		},
-
-		set: function ( value ) {
-
-			console.warn( 'THREE.OrbitControls: .dynamicDampingFactor has been renamed. Use .dampingFactor instead.' );
-			this.dampingFactor = value;
-
-		}
-
-	}
-
-} );
-
-// This set of controls performs orbiting, dollying (zooming), and panning.
-// Unlike TrackballControls, it maintains the "up" direction object.up (+Y by default).
-// This is very similar to OrbitControls, another set of touch behavior
-//
-//    Orbit - right mouse, or left mouse + ctrl/meta/shiftKey / touch: two-finger rotate
-//    Zoom - middle mouse, or mousewheel / touch: two-finger spread or squish
-//    Pan - left mouse, or arrow keys / touch: one-finger move
-
-var MapControls = function ( object, domElement ) {
-
-	OrbitControls.call( this, object, domElement );
-
-	// document.addEventListener('keydown', function(event){
-	// 	if(event.shiftKey){
-
-	// 	}
-	// });
-
-	//this.mouseButtons.LEFT = MOUSE.PAN;
-	this.mouseButtons.RIGHT = MOUSE.PAN;
-
-	this.touches.ONE = TOUCH.PAN;
-	this.touches.TWO = TOUCH.DOLLY_ROTATE;
-
-	this.zoomToCursor = true;
-	this.maxPolarAngle = Math.PI ; // must be less than pi/2 when zoomToCursor is true
-
-};
-
-MapControls.prototype = Object.create( EventDispatcher$1.prototype );
-MapControls.prototype.constructor = MapControls;
-
 /*!
  * camera-controls
  * https://github.com/yomotsu/camera-controls
@@ -54120,33 +52694,41 @@ const clock = new Clock();
 
 class Camera
 {
-    constructor(sizes, scene, canvas)
+    static numberOfScreens = 0
+    constructor(sizes, scene, canvas, isPrespective = true)
     {
         this.sizes  = sizes;
         this.scene  = scene;
         this.canvas = canvas;
-
+        this.isPrespective = isPrespective;
         this.setInstance();
         this.setControls();
+        this.setBoundaries(0, 0, this.sizes.width, this.sizes.height);
+        Camera.numberOfScreens += 1;
+        this.parentCamera = null;
     }
 
     setInstance()
     {
-        // aspect this.sizes.width / this.sizes.height
-        //this.instance = new THREE.OrthographicCamera( -50 , 50 , 50/aspect, -50/aspect, -1000,2000 )
-        this.instance = new PerspectiveCamera(45, this.sizes.width / this.sizes.height, 0.1, 4000);
-        this.instance.position.set(40, 40, 40);
+        if (this.isPrespective)
+        {
+            this.instance = new PerspectiveCamera(45, this.sizes.width / this.sizes.height, 0.1, 4000);
+            this.instance.position.set(40, 40, 40);    
+            this.instance.lookAt(0,0,0);
+        }
+        else
+        { 
+            let aspect = this.sizes.width / this.sizes.height;
+            this.instance = new OrthographicCamera(-80, 80, 80 / aspect, -80 / aspect, -1000, 2000);
+            this.instance.position.set(0, 1, 0);
+        }
         this.instance.up.set(0,0,1);
-        // this.instance.lookAt(1,1,1)
-        // const aspect this.sizes.width / this.sizes.height
-        // this.instance.position.set(0, 1, 0)
         this.scene.add(this.instance);
     }
 
     setControls()
     {
         CameraControls.install({THREE: THREE$1});
-        //this.controls  new OrbitControls(this.instance, this.canvas)
         this.controls = new CameraControls(this.instance, this.canvas);
         this.controls.dampingFactor = 0.1;
         this.controls.dollyToCursor = true;
@@ -54154,8 +52736,99 @@ class Camera
         this.controls.mouseButtons.left = CameraControls.ACTION.NONE;
         this.controls.mouseButtons.middle = CameraControls.ACTION.ROTATE;
         this.controls.mouseButtons.right = CameraControls.ACTION.TRUCK;
-        // this.controls.zoomToCursor  true
-        // this.controls.enableDamping  true
+      //  this.controls.boundaryEnclosesCamera
+    }
+
+    setBoundaries(x, y, w, h)
+    {
+        this.x = x;
+        this.y = y;
+        this.width = w;
+        this.height = h;
+        this.widthRatio = this.width/this.sizes.width;
+        this.heightRatio = this.height / this.sizes.height;
+        this.instance.aspect = this.widthRatio/this.heightRatio;
+        this.setFieldOfView(x, y, w, h);
+    }
+
+    setFieldOfView(x, y, w, h)
+    { 
+        let xValue = x * this.sizes.width;
+        let yValue = y * this.sizes.height;
+        if (xValue >= 0 && (xValue + w) <= this.sizes.width &&
+            w > 0 && h > 0 &&
+            yValue >= 0 && (yValue + h) <= this.sizes.height)
+        {
+            this.instance.setViewOffset(this.sizes.width, this.sizes.height, x * this.sizes.width, y * this.sizes.height, w, h);
+            if(Camera.numberOfScreens > 1) this.getNewCameraPosition(x,y, this.instance.zoom);
+        }   
+        this.instance.updateProjectionMatrix();
+    }
+
+    getVisibleHeightAtZDepth(depth)
+    {
+        // compensate for cameras not positioned at z=0
+        const cameraOffset = this.instance.position.z;
+        if ( depth < cameraOffset ) depth -= cameraOffset;
+        else depth += cameraOffset;
+      
+        if (this.instance.isPerspectiveCamera)
+        {
+            // vertical fov in radians
+            const vFOV = this.instance.fov * Math.PI / 180; 
+            // Math.abs to ensure the result is always positive
+            return 2 * Math.tan( vFOV / 2 ) * Math.abs( depth );
+        }
+        else
+        {
+            return ( this.instance.top - this.instance.bottom ) / ( 2 * Math.abs( depth ) );
+        }
+
+      };
+      
+    getVisibleWidthAtZDepth(depth)
+    {
+        if (this.instance.isPerspectiveCamera)
+        {
+            const height = this.getVisibleHeightAtZDepth(depth);
+            return height * this.instance.aspect;
+        }
+        else {
+            return ( this.instance.right - this.instance.left ) / ( 2 * Math.abs( depth ) );
+        }
+    };
+
+    getNewCameraPosition(x, y, depth)
+    {
+        // x-axis
+        let windowWidth = this.getVisibleWidthAtZDepth(depth);
+        let startPointX = x;
+        if (Math.abs(0.5 - x) > Math.abs(0.5 - (x + this.widthRatio))) startPointX = x + this.widthRatio;
+        let eccentricityX = Math.abs(0.5 - startPointX);
+        if((x - 0.5)*((x + this.widthRatio)-0.5) <= 0) eccentricityX *= -1;
+        let midpointX = (eccentricityX + 0.5) * windowWidth; 
+        let factorX = 1;
+        if (x >= 0.5) factorX = -1;
+        // y-axis
+        let windowheight = this.getVisibleHeightAtZDepth(depth);
+        let startPointY = y;
+        if (Math.abs(0.5 - y) > Math.abs(0.5 - (y + this.heightRatio))) startPointY = y + this.heightRatio;
+        let eccentricityY = Math.abs(0.5 - startPointY);
+        if((y - 0.5)*((y + this.heightRatio)-0.5) <= 0) eccentricityY *= -1;
+        let midpointY = (eccentricityY + 0.5) * windowheight; 
+        let factorY = 1;
+        if (y >= 0.5) factorY = -1;
+        this.controls.setFocalOffset(midpointX * factorX, midpointY * factorY, 0, true);
+    }
+
+    isMouseOver(x, y)
+    {
+        if (x >= this.x && x <= this.x + (this.width / this.sizes.width) &&
+            y >= this.y && y <= this.y + (this.height / this.sizes.height) && !this.controls.enabled)
+        {
+            return this
+        }
+        return null
     }
 
     resize()
@@ -54171,15 +52844,18 @@ class Camera
     }
 }
 
+new Vector2();
+
 class Renderer
 {
-    constructor(canvas, sizes, scene, camera)
+    constructor(canvas, sizes, scene, application, camera)
     {
         this.canvas = canvas;
-        this.sizes  = sizes;
-        this.scene  = scene;
+        this.sizes = sizes;
+        this.scene = scene;
+        this.application = application;
         this.camera = camera;
-
+        this.application.cameraList.forEach(c => { c.controls.enabled = false; });
         this.setInstance();
     }
 
@@ -54206,11 +52882,30 @@ class Renderer
     {
         this.instance.setSize(this.sizes.width, this.sizes.height);
         this.instance.setPixelRatio(Math.min(this.sizes.pixelRatio, 2));
+        this.application.cameraList.forEach(c => c.instance.updateProjectionMatrix());
     }
 
     update()
     {
-        this.instance.render(this.scene, this.camera.instance);
+        if (this.application.cameraList.count == 1)
+        {
+            this.instance.render(this.scene, this.camera.instance);
+        }
+        else {
+            for (const camera of this.application.cameraList)
+            {
+                let left = 2 + (camera.x * this.sizes.width);
+                let bottom = 2 + this.sizes.height - ((camera.heightRatio * this.sizes.height) + (camera.y * this.sizes.height));
+                let width = camera.widthRatio * this.sizes.width - 2;
+                let height = camera.heightRatio * this.sizes.height - 2;
+                this.instance.setViewport (left,bottom,width,height);
+                this.instance.setScissor(left,bottom,width,height);
+                this.instance.setScissorTest (true);
+               // camera.instance.aspect = width / height;
+                camera.instance.updateProjectionMatrix();
+                this.instance.render (this.scene, camera.instance);
+            }
+        } 
     }
 }
 
@@ -111518,6 +110213,8 @@ class SelectionHelper {
 const tempMouse$1 = new Vector2();
 const canvas$1 = document.querySelector('canvas.webgl');
 let instance$2 = null;
+let cameraVector$1 = new Vector3();
+let dir$1 = new Vector3();
 
 class Selection
 {  
@@ -111537,7 +110234,7 @@ class Selection
         }
         instance$2 = this;
 
-        this.camera = camera.instance;
+        this.camera = camera;
         this.scene = scene;
 
         this.raycaster = new Raycaster();
@@ -111554,7 +110251,7 @@ class Selection
         this.selectMaterial = new MeshLambertMaterial({
             transparent: true,
             opacity: 0.4,
-            color: 0xff00ff,
+            color: 0xbb00ff,
             depthTest: false
          });
 
@@ -111562,10 +110259,10 @@ class Selection
         this.HighlightedObject = {ifcObject:null};
         this.SelectedObjects = selectedObjectsList;
         this.importedObjects = importedIfcObjects;
-
+        this.intersection = null;
         // Box selection
         this.renderer = renderer.instance;
-        this.selection = new SelectionBox(this.camera, this.scene);
+        this.selection = new SelectionBox(this.camera.instance, this.scene);
         this.helper = new SelectionHelper(this.selection, this.renderer, 'selectBox');
         this.startFlag = false;
         this.worker = new Worker('./Application/Utils/SelectionWorker.js');
@@ -111581,17 +110278,27 @@ class Selection
         // Computes the position of the mouse on the screen
 	    // calculate mouse position in normalized device coordinates
 	    // (-1 to +1) for both components
-	    tempMouse$1.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-	    tempMouse$1.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+	    tempMouse$1.x =
+            ((event.clientX / window.innerWidth) - this.camera.x) * (2 * window.innerWidth/this.camera.width)- 1;
+        tempMouse$1.y =
+            - ((event.clientY / window.innerHeight) - this.camera.y) * (2 * window.innerHeight/this.camera.height) + 1;
         this.mouse = tempMouse$1;
-    }
-
+     }
 
     Hover(event, material, object)
     {
         this.#UpdateMousePosition(event); 
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-
+        if (this.camera.instance instanceof OrthographicCamera)
+        {
+            cameraVector$1.set(this.mouse.x, this.mouse.y, -1);
+            cameraVector$1.unproject(this.camera.instance);
+            dir$1.set( 0, 0, - 1 ).transformDirection( this.camera.instance.matrixWorld );
+            this.raycaster.set(cameraVector$1, dir$1); 
+        }
+        else {
+            this.raycaster.setFromCamera(this.mouse, this.camera.instance);
+        }
+        
         // Removes previous highlight if any existed    
         if(object.ifcObject !== null)
         {
@@ -111615,24 +110322,8 @@ class Selection
 
     Select(event, material, add, selectAll)
     {
-        this.#UpdateMousePosition(event); 
-
-        // if(this.camera instanceof OrthographicCamera)
-        // {
-        //     this.raycaster.ray.origin.set(0, 0, 0)
-        //     this.camera.localToWorld(this.raycaster.ray.origin)
-        //     this.raycaster.setFromCamera(this.mouse, this.camera)
-        //     this.raycaster.ray.origin.z is this.camera.far
-        // }
-        // else
-        // {
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-        //}
-        // Cast a ray
-        let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'));
-        const intersection = this.raycaster.intersectObjects(allowedIntersections, false)[0];
-
-        if(intersection != null && intersection.object.hasOwnProperty('modelObject'))
+        let intersection = this.HighlightedObject.ifcObject;
+        if(intersection != null)
         {
             // if selection without addind, remove all previous selections
             if(!add)
@@ -111647,14 +110338,13 @@ class Selection
                 this.SelectedObjects.selectedObjectsList = [];
             } 
 
-            let object = intersection.object.modelObject;
             if (add && selectAll)
             {
                 // find all objects belonging to the same model
-                let modelObjects = this.importedObjects.ifcObjects.filter(e => e.modelId == object.modelId);
+                let modelObjects = this.importedObjects.ifcObjects.filter(e => e.modelId == intersection.modelId);
 
                 // filter only distinct objects (remove duplicates if any)
-                const repititions = this.SelectedObjects.selectedObjectsList.filter(e => e.modelId == object.modelId);
+                const repititions = this.SelectedObjects.selectedObjectsList.filter(e => e.modelId == intersection.modelId);
                 modelObjects = modelObjects.filter((e) => !repititions.includes(e));
                 // add to selection
                 for(const obj of modelObjects)
@@ -111666,16 +110356,16 @@ class Selection
                 }
             }
             // if selection is not repeated, proceed
-            else if (! this.SelectedObjects.selectedObjectsList.some(e => e.mesh.uuid == intersection.object.uuid))
+            else if (! this.SelectedObjects.selectedObjectsList.some(e => e.mesh.uuid == intersection.uuid))
             {
                 // highlight intersected object
-                object.select(material, this.scene);
+                intersection.select(material, this.scene);
                 // add to selected objects list
-                this.SelectedObjects.selectedObjectsList.push(object);
+                this.SelectedObjects.selectedObjectsList.push(intersection);
             }    
             else if (add) // to unselect already selected element when pressing shift
             {
-                const selectedOject = this.SelectedObjects.selectedObjectsList.filter(e => e.mesh.uuid == intersection.object.uuid)[0];
+                const selectedOject = this.SelectedObjects.selectedObjectsList.filter(e => e.mesh.uuid == intersection.uuid)[0];
                 const index = this.SelectedObjects.selectedObjectsList.indexOf(selectedOject); 
                 this.SelectedObjects.selectedObjectsList.splice(index, 1);
                 object.unselect(this.scene);
@@ -111712,10 +110402,10 @@ class Selection
                 instance$2.selectMaterial,
                 event.shiftKey? true:false,
                 instance$2.selectAll );
-          
+          instance$2.#UpdateMousePosition(event);
             instance$2.selection.startPoint.set(
-                (event.clientX / window.innerWidth) * 2 - 1,
-                -(event.clientY / window.innerHeight) * 2 + 1,
+                instance$2.mouse.x,
+                instance$2.mouse.y,
                 0.5);
             // start set(( event.clientX / window.innerWidth ) * 2 - 1,  -(event.clientY / window.innerHeight) * 2 + 1)
             // positions push(new Vector2(start.x, start.y))
@@ -111736,10 +110426,11 @@ class Selection
 
         if (event.button === 0 && instance$2.startFlag) 
         {
+            instance$2.#UpdateMousePosition(event);
             if (instance$2.helper.isDown) {
                 instance$2.selection.endPoint.set(
-                    (event.clientX / window.innerWidth) * 2 - 1,
-                    -(event.clientY / window.innerHeight) * 2 + 1,
+                    instance$2.mouse.x,
+                    instance$2.mouse.y,
                     0.5);
                     document.querySelectorAll(".selectBox").forEach(x => x.style.visibility = "visible");
             }
@@ -111758,9 +110449,10 @@ class Selection
     {
         if (event.button === 0 && instance$2.startFlag) 
         {
+            instance$2.#UpdateMousePosition(event);
             instance$2.selection.endPoint.set(
-                (event.clientX / window.innerWidth) * 2 - 1,
-                -(event.clientY / window.innerHeight) * 2 + 1,
+                instance$2.mouse.x,
+                instance$2.mouse.y,
                 0.5);
             let distance = instance$2.selection.endPoint.distanceTo(instance$2.selection.startPoint);
             if(distance > 0.1)
@@ -111847,6 +110539,8 @@ class Selection
 const tempMouse = new Vector2();
 const canvas = document.querySelector('canvas.webgl');
 let instance$1 = null;
+let cameraVector = new Vector3();
+let dir = new Vector3();
 
 class RayCasting extends EventEmitter
 {  
@@ -111860,7 +110554,7 @@ class RayCasting extends EventEmitter
         }
         instance$1 = this;
 
-        this.camera = camera.instance;
+        this.camera = camera;
         this.scene = scene;
 
         this.ifcLoader = ifcLoader;
@@ -111903,15 +110597,26 @@ class RayCasting extends EventEmitter
         // Computes the position of the mouse on the screen
         // calculate mouse position in normalized device coordinates
         // (-1 to +1) for both components
-        tempMouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
-        tempMouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+        tempMouse.x =
+            ((event.clientX / window.innerWidth) - this.camera.x) * (2 * window.innerWidth / this.camera.width) - 1;
+        tempMouse.y =
+            - ((event.clientY / window.innerHeight) - this.camera.y) * (2 * window.innerHeight / this.camera.height) + 1;
         this.mouse = tempMouse;
     }
 
     Hover(event)
     {
         this.#UpdateMousePosition(event); 
-        this.raycaster.setFromCamera(this.mouse, this.camera);
+        if (this.camera.instance instanceof PerspectiveCamera)
+        {
+            this.raycaster.setFromCamera(this.mouse, this.camera.instance);         
+        }
+        else {
+            cameraVector.set(this.mouse.x, this.mouse.y, -1);
+            cameraVector.unproject(this.camera.instance);
+            dir.set( 0, 0, - 1 ).transformDirection( this.camera.instance.matrixWorld );
+            this.raycaster.set(cameraVector, dir); 
+        }
         // Cast a ray
         let allowedIntersections = this.scene.children.filter(s => !s.isLine && !s.hasOwnProperty('canNotBeRayCasted'));
         const intersection = this.raycaster.intersectObjects(allowedIntersections)[0];
@@ -111926,16 +110631,17 @@ class RayCasting extends EventEmitter
             if(point != null && intersection.point.distanceTo(point) < 0.3 && !this.selectLine)
             {
                this.marker.position.set(point.x, point.y, point.z);
-               this.marker.lookAt(this.camera.position);
                let Scale = 1;
-               if(this.camera instanceof PerspectiveCamera)
+               if(this.camera.instance instanceof PerspectiveCamera)
                {
                    Scale = intersection.distance / 18;
+                   this.marker.lookAt(this.camera.instance.position);
                }
                else
                {
-                   const scaleFactor = 3;
-                   Scale = scaleFactor/this.camera.zoom;
+                   const scaleFactor = 10;
+                   Scale = scaleFactor / this.camera.instance.zoom;
+                   this.marker.lookAt(cameraVector);
                }
                this.marker.scale.set(Scale, Scale, 1);
                this.scene.add(this.marker);
@@ -112134,10 +110840,10 @@ class RayCasting extends EventEmitter
         //  distance =  -----------------    
         //                  |x2-x1|
         //
-        var diff1 = new Vector3(0,0,0).subVectors(point, linePoint1);
-        var diff2 = new Vector3(0,0,0).subVectors(point, linePoint2);
-        var cross = new Vector3(0,0,0).crossVectors(diff1, diff2);
-        var diff3 = new Vector3(0,0,0).subVectors(linePoint2, linePoint1);
+        let diff1 = new Vector3(0,0,0).subVectors(point, linePoint1);
+        let diff2 = new Vector3(0,0,0).subVectors(point, linePoint2);
+        let cross = new Vector3(0,0,0).crossVectors(diff1, diff2);
+        let diff3 = new Vector3(0,0,0).subVectors(linePoint2, linePoint1);
         return cross.length() / diff3.length()
     }
 
@@ -112300,14 +111006,15 @@ class Initialization
 
         // Scene
         this.scene = new Scene();
-        //this.scene.background new THREE.Color('#00ffff');
         this.resources = new InitialResources(sources);
         
-        // Camera
-        this.camera = new Camera(this.sizes, this.scene, this.canvas, this.renderer);
-        
+        // Cameras
+        this.camera = new Camera(this.sizes, this.scene, this.canvas);  
+        this.cameraList = [];
+        this.cameraList.push(this.camera);
+            
         // Renderer
-        this.renderer = new Renderer(this.canvas, this.sizes, this.scene, this.camera);
+        this.renderer = new Renderer(this.canvas, this.sizes, this.scene, this, this.camera);
 
         // Time
         this.time = new Time();
@@ -112945,11 +111652,403 @@ class CopyElementCommand extends Command
     }
 }
 
-new SpriteMaterial({
+let DESCENDER_ADJUST = 1; // Constant relating to text boarder box height for lables
+
+
+const highLightMaterial = new SpriteMaterial({
     map: new TextureLoader().load('Application/Utils/Resources/highlight.png'),
     depthTest: false,
     color: "#ff0000"
 });
+
+class TextLabels {
+    static makeTextSprite(message, x, y, z, parameters) {
+        if (parameters === undefined) parameters = {};
+
+        let fontface = parameters.hasOwnProperty("fontface") ?
+            parameters["fontface"] : "Arial";
+
+        let fontsize = parameters.hasOwnProperty("fontsize") ?
+            parameters["fontsize"] : 28;
+
+        let borderThickness = parameters.hasOwnProperty("borderThickness") ?
+            parameters["borderThickness"] : undefined; //4; 
+
+        let borderColor = parameters.hasOwnProperty("borderColor") ?
+            parameters["borderColor"] : undefined; //{ r:0, g:0, b:0, a:0.0 }; 
+
+        let fillColor = parameters.hasOwnProperty("fillColor") ?
+            parameters["fillColor"] : undefined;
+
+        let textColor = parameters.hasOwnProperty("textColor") ?
+            parameters["textColor"] : {
+                r: 25,
+                g: 25,
+                b: 25,
+                a: 1.0
+            };
+
+        let radius = parameters.hasOwnProperty("radius") ?
+            parameters["radius"] : undefined; // 6; 
+
+        let vAlign = parameters.hasOwnProperty("vAlign") ?
+            parameters["vAlign"] : "center";
+
+        let hAlign = parameters.hasOwnProperty("hAlign") ?
+            parameters["hAlign"] : "center";
+
+        let canvas = document.createElement('canvas');
+        let context = canvas.getContext('2d');
+
+        // set a large-enough fixed-size canvas  
+        canvas.width = 1800;
+        canvas.height = 900;
+
+        context.font = fontsize + "px " + fontface;
+        context.textBaseline = "alphabetic";
+        context.textAlign = "left";
+
+        // get size data (height depends only on font size) 
+        let metrics = context.measureText(message);
+        let textWidth = metrics.width;
+
+        /* 
+        // need to ensure that our canvas is always large enough 
+        // to support the borders and justification, if any 
+        // Note that this will fail for vertical text (e.g. Japanese)
+        // The other problem with this approach is that the size of the canvas 
+        // varies with the length of the text, so 72-point text is different 
+        // sizes for different text strings.  There are ways around this 
+        // by dynamically adjust the sprite scale etc. but not in this demo...
+        var larger = textWidth > fontsize ? textWidth : fontsize;
+        canvas.width is larger * 4; 
+        canvas.height is larger * 2; 
+        // need to re-fetch and refresh the context after resizing the canvas 
+        context = canvas.getContext('2d'); 
+        context.font = fontsize + "px " + fontface; 
+        context.textBaseline = "alphabetic"; 
+        context.textAlign = "left"; 
+         metrics = context.measureText( message ); 
+        textWidth = metrics.width; 
+            
+         console.log("canvas: " + canvas.width + ", " + canvas.height + ", texW: " + textWidth);
+        */
+
+        // find the center of the canvas and the half of the font width and height 
+        // we do it this way because the sprite's position is the CENTER of the sprite 
+        let cx = canvas.width / 2;
+        let cy = canvas.height / 2;
+        let tx = textWidth / 2.0;
+        let ty = fontsize / 2.0;
+
+        // then adjust for the justification 
+        if (vAlign == "bottom")
+            ty = 0;
+        else if (vAlign == "top")
+            ty = fontsize;
+
+        if (hAlign == "left")
+            tx = textWidth;
+        else if (hAlign == "right")
+            tx = 0;
+
+        // the DESCENDER_ADJUST is extra height factor for text below baseline: g,j,p,q. since we don't know the true bbox 
+        TextLabels.#roundRect(context, cx - tx, cy + ty + 0.28 * fontsize,
+            textWidth, fontsize * DESCENDER_ADJUST, radius, borderThickness, borderColor, fillColor);
+
+        // text color.  Note that we have to do this AFTER the round-rect as it also uses the "fillstyle" of the canvas 
+        context.fillStyle = TextLabels.#getCanvasColor(textColor);
+        var lines = message.split('\n');
+        for (var i = 0; i<lines.length; i++)
+        {
+            context.fillText(lines[i], cx - tx, cy + ty - (120*i) );
+        }
+        //.fillText(message, cx - tx, cy + ty);
+
+        // canvas contents will be used for a texture 
+        const texture = new Texture(canvas);
+        texture.needsUpdate = true;
+        const spriteMaterial = new SpriteMaterial({
+            map: texture
+        });
+        // create the sprite 
+        let sprite = new Sprite(spriteMaterial);
+
+        // we MUST set the scale to 2:1.  The canvas is already at a 2:1 scale, 
+        // but the sprite itself is square: 1.0 by 1.0 
+        // Note also that the size of the scale factors controls the actual size of the text-label 
+        sprite.scale.set(4, 2, 1);
+
+        // set the sprite's position.  Note that this position is in the CENTER of the sprite 
+        sprite.position.set(x, y, z);
+
+        return sprite;
+    }
+
+    static createHighLight(point) {
+        // create the sprite 
+        let sprite = new Sprite(highLightMaterial);
+        sprite.position.set(point.x, point.y, point.z);
+        sprite.scale.set(0.2, 0.2, 0.2);
+        return sprite;
+    }
+
+    static #roundRect(ctx, x, y, w, h, r, borderThickness, borderColor, fillColor) {
+        // no point in drawing it if it isn't going to be rendered 
+        if (fillColor == undefined && borderColor == undefined)
+            return;
+
+        x -= borderThickness + r;
+        y += borderThickness + r;
+        w += borderThickness * 2 + r * 2;
+        h += borderThickness * 2 + r * 2;
+
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y - r);
+        ctx.lineTo(x + w, y - h + r);
+        ctx.quadraticCurveTo(x + w, y - h, x + w - r, y - h);
+        ctx.lineTo(x + r, y - h);
+        ctx.quadraticCurveTo(x, y - h, x, y - h + r);
+        ctx.lineTo(x, y - r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+
+        ctx.lineWidth = borderThickness;
+
+        // background color 
+        // border color 
+
+        // if the fill color is defined, then fill it 
+        if (fillColor != undefined) {
+            ctx.fillStyle = TextLabels.#getCanvasColor(fillColor);
+            ctx.fill();
+        }
+
+        if (borderThickness > 0 && borderColor != undefined) {
+            ctx.strokeStyle = TextLabels.#getCanvasColor(borderColor);
+            ctx.stroke();
+        }
+    }
+
+    static #getCanvasColor(color) {
+        return "rgba(" + color.r + "," + color.g + "," + color.b + "," + color.a + ")";
+    }
+}
+
+class DimentionBetweenTwoPoints extends Command
+{
+    constructor(startPoint, endPoint, scene) 
+    {
+        super();
+        this.scene = scene;
+        this.startPoint = startPoint;
+        this.endPoint = endPoint;
+        this.points = [this.startPoint, this.endPoint];
+        this.linematerial = new LineBasicMaterial( { color: 0xff00ff } );
+        this.lineGeom = new BufferGeometry().setFromPoints(this. points );
+        this.Line = new Line( this.lineGeom, this.linematerial );
+        this.Line.material.depthTest = false;
+        this.Line.name = 'TwoPointsDimentionLine';
+        this.Line.canNotBeRayCasted = false;
+        this.distance = this.startPoint.distanceTo(this.endPoint);
+        this.distanceString = this.distance.toFixed(3) + " [m]";
+        this.textPosition = this.#GetTextPosition(this.startPoint, this.endPoint);
+        this.text = TextLabels.makeTextSprite(this.distanceString, this.textPosition.x, this.textPosition.y, this.textPosition.z,
+                                  { fontsize: 120, fontface: "Georgia", textColor: { r: 117, g: 10, b: 201, a: 1.0 },
+                                   vAlign: "center", hAlign: "center" });
+        this.text.material.depthTest = false;
+        this.text.canNotBeRayCasted = false;
+    }
+
+    execute()
+    {
+        this.scene.add(this.Line);
+        this.scene.add(this.text);
+    }
+
+    undo()
+    {
+        this.scene.remove(this.Line);
+        this.scene.remove(this.text);
+    }
+
+    redo()
+    {
+        this.scene.add(this.Line);
+        this.scene.add(this.text);
+    }
+
+    remove()
+    {
+        this.Line.geometry.dispose();
+        this.text.geometry.dispose();
+        this.text.material.dispose();
+    }
+
+    #GetTextPosition(startPoint, endPoint)
+    {
+        const zDirection = new Vector3(0, 0, -1);
+        const lineVector = endPoint.clone().sub(startPoint).normalize();
+        let perpendicularVector;
+        if(lineVector.equals(zDirection) || lineVector.equals(zDirection.negate()))
+        {
+            perpendicularVector = lineVector.clone().cross(new Vector3(1, 0, 0)).normalize().cross(lineVector).normalize();
+        }
+        else
+        {
+            perpendicularVector = lineVector.clone().cross(zDirection).normalize().cross(lineVector).normalize();
+        }
+        const initialPosition = startPoint.clone().add(endPoint.clone().sub(startPoint).normalize().multiplyScalar(0.5*(startPoint.distanceTo(endPoint))));
+        return initialPosition.add(perpendicularVector.multiplyScalar(0.5))
+    }
+}
+
+/**
+ * Load IFC file.
+ * Convert and store IFC.js output geometry to a new three.js geometry.
+ * Store IFC data for each object.
+ */
+class DimentionBetweenLineAndPoint extends Command
+{
+    constructor(line, point, scene) 
+    {
+        super();
+        this.scene = scene;
+        this.point = point;
+        this.line = line;
+        this.endPoint = this.#GetIntersectionBetweenPointAndLine(line, point);
+        this.points = [this.point, this.endPoint];
+        this.linematerial = new LineBasicMaterial( { color: 0xff00ff , depthTest: false} );
+        this.subLinematerial = new LineBasicMaterial( { color: 0x333333 } );
+        this.lineGeom = new BufferGeometry().setFromPoints(this. points );
+        this.Line = new Line( this.lineGeom, this.linematerial );
+        this.Line.name = 'TwoPointsDimentionLine';
+        this.Line.canNotBeRayCasted = false;
+        this.distance = this.point.distanceTo(this.endPoint);
+        this.distanceString = this.distance.toFixed(3) + " [m]";
+        this.textPosition = this.#GetTextPosition(this.point, this.endPoint);
+        this.text = TextLabels.makeTextSprite(this.distanceString, this.textPosition.x, this.textPosition.y, this.textPosition.z,
+                                  { fontsize: 120, fontface: "Georgia", textColor: { r: 117, g: 10, b: 201, a: 1.0 },
+                                   vAlign: "center", hAlign: "center" });
+        let nearerPoint = this.line.points[0];
+        if(this.line.points[0].distanceTo(this.endPoint) > this.line.points[1].distanceTo(this.endPoint))
+        {
+            nearerPoint = this.line.points[1];
+        }
+
+        this.subLine = new Line(
+            new BufferGeometry().setFromPoints([nearerPoint, this.endPoint]), 
+            this.subLinematerial);
+        this.text.material.depthTest = false;
+        this.text.canNotBeRayCasted = false;
+    }
+
+    execute()
+    {
+        this.scene.add(this.Line);
+        this.scene.add(this.subLine);
+        this.scene.add(this.text);
+    }
+
+    undo()
+    {
+        this.scene.remove(this.Line);
+        this.scene.remove(this.subLine);
+        this.scene.remove(this.text);
+    }
+
+    redo()
+    {
+        this.execute();
+    }
+
+    remove()
+    {
+        this.Line.geometry.dispose();
+        this.subLine.geometry.dispose();
+        this.text.geometry.dispose();
+        this.text.material.dispose();
+    }
+
+    #GetTextPosition(startPoint, endPoint)
+    {
+        const zDirection = new Vector3(0, 0, -1);
+        const lineVector = endPoint.clone().sub(startPoint).normalize();
+        let perpendicularVector;
+        if(lineVector.equals(zDirection) || lineVector.equals(zDirection.negate()))
+        {
+            perpendicularVector = lineVector.clone().cross(new Vector3(1, 0, 0)).normalize().cross(lineVector).normalize();
+        }
+        else
+        {
+            perpendicularVector = lineVector.clone().cross(zDirection).normalize().cross(lineVector).normalize();
+        }
+        const initialPosition = startPoint.clone().add(endPoint.clone().sub(startPoint).normalize().multiplyScalar(0.5*(startPoint.distanceTo(endPoint))));
+        return initialPosition.add(perpendicularVector.multiplyScalar(0.5))
+    }
+
+    #GetIntersectionBetweenPointAndLine(line, point)
+    {
+        const vector = point.clone().sub(line.points[0]);
+        const projection = vector.dot(line.vector)
+                          /Math.sqrt((line.vector.x * line.vector.x) + (line.vector.y * line.vector.y) +(line.vector.z * line.vector.z));
+        return line.points[0].clone().add(line.vector.clone().normalize().multiplyScalar(projection))
+    }
+}
+
+/**
+ * Load IFC file.
+ * Convert and store IFC.js output geometry to a new three.js geometry.
+ * Store IFC data for each object.
+ */
+class PointCoordinatesCommand extends Command
+{
+    constructor(point, scene) 
+    {
+        super();
+        this.scene = scene;
+        this.point = point;
+        this.coordinatesString = 
+            `z = ${this.point.z.toFixed(3)}\ny = ${this.point.y.toFixed(3)}\nx = ${this.point.x.toFixed(3)}`;
+        this.textPosition = point.clone().add(new Vector3(0, 0, 0.5));
+        this.text = TextLabels.makeTextSprite(this.coordinatesString, this.textPosition.x, this.textPosition.y, this.textPosition.z,
+                                  { fontsize: 120, fontface: "Georgia", 
+                                    //fillColor: { r: 255, g: 255, b: 255, a: 0.2 },
+                                    textColor: { r: 117, g: 10, b: 201, a: 1.0 },
+                                    vAlign: "center", hAlign: "center" });
+        this.text.canNotBeRayCasted = false;
+        this.text.material.depthTest = false;
+        this.highLight = TextLabels.createHighLight(this.point); 
+        this.highLight.canNotBeRayCasted = false;
+    }
+
+    execute()
+    {
+        this.scene.add(this.highLight);
+        this.scene.add(this.text);
+    }
+
+    undo()
+    {
+        this.scene.remove(this.highLight);
+        this.scene.remove(this.text);
+    }
+
+    redo()
+    {
+        this.scene.add(this.highLight);
+        this.scene.add(this.text);
+    }
+
+    remove()
+    {
+       // this.Line.geometry.dispose()
+        this.text.geometry.dispose();
+        this.text.material.dispose();
+    }
+}
 
 class DeleteCommand extends Command
 {
@@ -113101,12 +112200,80 @@ class Hide_ShowElementCommand
     }
 }
 
+class AddNewCamera extends Command
+{
+  static number = 0
+    constructor(sizes, scene, canvas, isPrespective, cameraList, isVerticalSplit) 
+    {
+      super();
+      this.sizes = sizes;
+      this.scene = scene;
+      this.canvas = canvas;
+      this.isPrespective = isPrespective;
+      this.cameraList = cameraList;
+      this.isVerticalSplit = isVerticalSplit;
+      AddNewCamera.number += 1;
+    }
+
+    execute()
+    {
+      console.log(this.isVerticalSplit);
+      if (Camera.numberOfScreens < 4)
+      {
+        if (AddNewCamera.number == 2 || AddNewCamera.number == 3)
+        {
+          if (this.isVerticalSplit) this.isVerticalSplit = false;
+          else this.isVerticalSplit = true;
+        }  
+        this.camera = new Camera(this.sizes, this.scene, this.canvas, this.isPrespective);
+        this.cameraList.push(this.camera);
+        let cameraToSplit = this.cameraList[this.cameraList.length - 2];
+        if(Camera.numberOfScreens == 4) cameraToSplit = this.cameraList[0];
+        this.camera.parentCamera = cameraToSplit;
+        let x = cameraToSplit.x;
+        let y = cameraToSplit.y;
+        if (this.isVerticalSplit)
+        {          
+          let h = cameraToSplit.height;
+          let w = cameraToSplit.width / 2;
+          cameraToSplit.setBoundaries(x, y, w, h);         
+          let nx = x + (cameraToSplit.widthRatio);
+          this.camera.setBoundaries(nx, y, w, h);    
+        }
+        else
+        {
+          let h = cameraToSplit.height / 2;
+          let w = cameraToSplit.width;
+          cameraToSplit.setBoundaries(x, y, w, h);
+          let ny = y + (cameraToSplit.heightRatio);
+          this.camera.setBoundaries(x,ny,w,h);
+        }
+        this.cameraList.forEach(c => c.controls.enabled = false);
+      } 
+    }
+
+    undo()
+    {
+       
+    }
+
+    redo()
+    {
+        
+    }
+
+    remove()
+    {
+       
+    }
+}
+
 /**
  * Program Initialization
  */
 const init = new Initialization(document.querySelector('canvas.webgl'));
 let dialog = document.getElementById('location-dialog-form');
-
+const mouse = new Vector2(0,0);
 /**
  * Events
  */
@@ -113114,71 +112281,68 @@ let dialog = document.getElementById('location-dialog-form');
 
 /**
  * Import IFC model
- */ 
+ */
 const input = document.getElementById("file-input");
-input.addEventListener("change", (changed) => 
-  {
+input.addEventListener("change", (changed) => {
     const file = changed.target.files[0];
     let ifcURL;
-    if (file != null)
-    {
+    if (file != null) {
       ifcURL = URL.createObjectURL(file);
-    }
-    else {
+    } else {
       return
     }
     let position = new Vector3(init.positionVariables.positionX, init.positionVariables.positionY, init.positionVariables.positionZ);
     init.commands.executeCommand(new LoadIfcCommand(ifcURL, position));
   },
   false);
-  
 
 
 /**
  * Define model location
- */ 
-document.getElementById("model-location").onclick=function(){ModelLocationDialog();};
-function ModelLocationDialog() 
-{
+ */
+document.getElementById("model-location").onclick = function () {
+  ModelLocationDialog();
+};
+
+function ModelLocationDialog() {
   document.getElementById('dialog-form-title').innerHTML = "Model LocaTion";
   //document.getElementById('show').onclick = function() {    
-  dialog.show();   
-  document.getElementById('Ok').onclick = function() 
-  {
+  dialog.show();
+  document.getElementById('Ok').onclick = function () {
     init.positionVariables.positionX = parseFloat(document.getElementById('positionX').value);
     init.positionVariables.positionY = parseFloat(document.getElementById('positionY').value);
     init.positionVariables.positionZ = parseFloat(document.getElementById('positionZ').value);
     document.getElementById('positionX').innerHTML = init.positionVariables.positionX;
     document.getElementById('positionY').innerHTML = init.positionVariables.positionY;
     document.getElementById('positionZ').innerHTML = init.positionVariables.positionZ;
-    dialog.close();    
-  };  
+    dialog.close();
+  };
 }
 
 /**
  * Move element
  */
-document.getElementById("move-button").onclick=function(){MoveElementDialog();};
-function MoveElementDialog() 
-{  
-  if(init.SelectedObjects.selectedObjectsList.length > 0)
-  {
+document.getElementById("move-button").onclick = function () {
+  MoveElementDialog();
+};
+
+function MoveElementDialog() {
+  if (init.SelectedObjects.selectedObjectsList.length > 0) {
     init.selection.Disable();
     init.rayCaster.Enable();
     dialog = document.getElementById('location-dialog-form');
     document.getElementById('dialog-form-title').innerHTML = "Move Element";
     //document.getElementById('show').onclick = function() {    
-    dialog.show();   
+    dialog.show();
 
     document.addEventListener('keydown', stop);
 
-    document.getElementById('Ok').onclick = function() 
-    {
+    document.getElementById('Ok').onclick = function () {
       const deltaX = parseFloat(document.getElementById('positionX').value);
       const deltaY = parseFloat(document.getElementById('positionY').value);
       const deltaZ = parseFloat(document.getElementById('positionZ').value);
       init.commands.executeCommand(new MoveElementCommand(init.SelectedObjects.selectedObjectsList, deltaX, deltaY, deltaZ));
-      dialog.close(); 
+      dialog.close();
       init.rayCaster.Disable();
       init.selection.Enable();
       init.unSelect();
@@ -113188,8 +112352,7 @@ function MoveElementDialog()
       init.rayCaster.off('TwoPointsSelected');
       document.removeEventListener('keydown', stop);
     };
-    init.rayCaster.on('TwoPointsSelected', ()=>
-    {
+    init.rayCaster.on('TwoPointsSelected', () => {
       let vector = init.rayCaster.pointsList[1].sub(init.rayCaster.pointsList[0]);
       init.rayCaster.Disable();
       init.selection.Enable();
@@ -113205,27 +112368,27 @@ function MoveElementDialog()
 /**
  * Copy element
  */
-document.getElementById("copy-button").onclick=function(){CopyElementDialog();};
-function CopyElementDialog() 
-{
-  if(init.SelectedObjects.selectedObjectsList.length > 0)
-  {
+document.getElementById("copy-button").onclick = function () {
+  CopyElementDialog();
+};
+
+function CopyElementDialog() {
+  if (init.SelectedObjects.selectedObjectsList.length > 0) {
     init.selection.Disable();
     init.rayCaster.Enable();
     dialog = document.getElementById('location-dialog-form');
-    document.getElementById('dialog-form-title').innerHTML = "Copy Element"; 
-    dialog.show();   
+    document.getElementById('dialog-form-title').innerHTML = "Copy Element";
+    dialog.show();
     document.addEventListener('keydown', stop);
 
-    document.getElementById('Ok').onclick = function()
-    {
+    document.getElementById('Ok').onclick = function () {
       const deltaX = parseFloat(document.getElementById('positionX').value);
       const deltaY = parseFloat(document.getElementById('positionY').value);
       const deltaZ = parseFloat(document.getElementById('positionZ').value);
-      init.commands.executeCommand(new CopyElementCommand(init.SelectedObjects.selectedObjectsList, 
-                                                          deltaX, deltaY, deltaZ, init.scene, init.importedModels));
+      init.commands.executeCommand(new CopyElementCommand(init.SelectedObjects.selectedObjectsList,
+        deltaX, deltaY, deltaZ, init.scene, init.importedModels));
       init.unSelect();
-      dialog.close(); 
+      dialog.close();
       document.getElementById('positionX').innerHTML = 0;
       document.getElementById('positionY').innerHTML = 0;
       document.getElementById('positionZ').innerHTML = 0;
@@ -113235,13 +112398,12 @@ function CopyElementDialog()
       init.selection.Enable();
     };
 
-    init.rayCaster.on('TwoPointsSelected', ()=>
-    {
+    init.rayCaster.on('TwoPointsSelected', () => {
       let vector = init.rayCaster.pointsList[1].sub(init.rayCaster.pointsList[0]);
       init.rayCaster.Disable();
       init.selection.Enable();
-      init.commands.executeCommand(new CopyElementCommand(init.SelectedObjects.selectedObjectsList, 
-                                                          vector.x, vector.y, vector.z, init.scene, init.importedModels));
+      init.commands.executeCommand(new CopyElementCommand(init.SelectedObjects.selectedObjectsList,
+        vector.x, vector.y, vector.z, init.scene, init.importedModels));
       dialog.close();
       init.unSelect();
       init.rayCaster.off('TwoPointsSelected');
@@ -113253,34 +112415,141 @@ function CopyElementDialog()
 /**
  * Rotate element
  */
-document.getElementById("rotate-button").onclick=function(){RotateElementDialog();};
-function RotateElementDialog() 
-{
+document.getElementById("rotate-button").onclick = function () {
+  RotateElementDialog();
+};
+
+function RotateElementDialog() {
   dialog = document.getElementById('rotation-dialog-form');
-  document.getElementById('rotation-dialog-form-title').innerHTML = "Rotate Element";  
-  dialog.show();   
-  document.getElementById('Ok-rotation').onclick = function() 
-  {
+  document.getElementById('rotation-dialog-form-title').innerHTML = "Rotate Element";
+  dialog.show();
+  document.getElementById('Ok-rotation').onclick = function () {
     const deltaZ = parseFloat(document.getElementById('rotationZ').value) * (Math.PI / 180);
-    init.commands.executeCommand(new RotateElementCommand(init.SelectedObjects.selectedObjectsList,0, 0, deltaZ));
+    init.commands.executeCommand(new RotateElementCommand(init.SelectedObjects.selectedObjectsList, 0, 0, deltaZ));
     init.rayCaster.Disable();
     init.selection.Enable();
     init.unSelect();
-    dialog.close(); 
+    dialog.close();
     document.getElementById('rotationZ').innerHTML = "0";
-  }; 
+  };
 }
 
+/**
+ * Add dimention between two points
+ */
+document.getElementById("Points-dimentions").onclick = function () {
+  AddTwoPointsDimentions();
+};
+
+function AddTwoPointsDimentions() {
+  init.selection.Disable();
+  init.rayCaster.Enable();
+  document.addEventListener('keydown', stop);
+
+  init.rayCaster.on('TwoPointsSelected', () => {
+    init.commands.executeCommand(new DimentionBetweenTwoPoints(init.rayCaster.pointsList[0], init.rayCaster.pointsList[1], init.scene));
+    init.rayCaster.Disable();
+    init.selection.Enable();
+    init.unSelect();
+    init.rayCaster.off('TwoPointsSelected');
+    document.removeEventListener('keydown', stop);
+  });
+}
+
+/**
+ * Add dimention between line and point
+ */
+document.getElementById("Line-Point-dimentions").onclick = function () {
+  LinePointDimentions();
+};
+
+function LinePointDimentions() {
+  init.selection.Disable();
+  init.rayCaster.Enable(true);
+  document.addEventListener('keydown', stop);
+
+  init.rayCaster.on('LineAndPointSelected', () => {
+    const lineCoordinates = init.rayCaster.Line.geometry.attributes.position.array;
+    const lineStartPoint = new Vector3(lineCoordinates[0], lineCoordinates[1], lineCoordinates[2]);
+    const lineEndPoint = new Vector3(lineCoordinates[3], lineCoordinates[4], lineCoordinates[5]);
+    const lineVector = lineEndPoint.clone().sub(lineStartPoint);
+    const line = {
+      points: [lineStartPoint, lineEndPoint],
+      vector: lineVector
+    };
+    init.commands.executeCommand(new DimentionBetweenLineAndPoint(line, init.rayCaster.pointsList[0], init.scene));
+    init.rayCaster.Disable();
+    init.selection.Enable();
+    init.unSelect();
+    init.rayCaster.off('LineAndPointSelected');
+    document.removeEventListener('keydown', stop);
+  });
+}
+
+/**
+ * Add dimention for line
+ */
+document.getElementById("Line-dimentions").onclick = function () {
+  LineDimentions();
+};
+
+function LineDimentions() {
+  init.selection.Disable();
+  init.rayCaster.Enable(true);
+  document.addEventListener('keydown', stop);
+
+  init.rayCaster.on('LineSelected', () => {
+    const lineCoordinates = init.rayCaster.Line.geometry.attributes.position.array;
+    const lineStartPoint = new Vector3(lineCoordinates[0], lineCoordinates[1], lineCoordinates[2]);
+    const lineEndPoint = new Vector3(lineCoordinates[3], lineCoordinates[4], lineCoordinates[5]);
+    init.commands.executeCommand(new DimentionBetweenTwoPoints(lineStartPoint, lineEndPoint, init.scene));
+    init.rayCaster.Disable();
+    init.selection.Enable();
+    init.unSelect();
+    init.rayCaster.off('LineSelected');
+    document.removeEventListener('keydown', stop);
+  });
+}
+
+/**
+ * Add point coordinates 
+ */
+document.getElementById("Point-Coordinates").onclick = function () {
+  PointCoordinates();
+};
+
+function PointCoordinates() {
+  init.selection.Disable();
+  init.rayCaster.Enable();
+  document.addEventListener('keydown', stop);
+
+  init.rayCaster.on('OnePointSelected', () => {
+    const point = init.rayCaster.pointsList[0];
+    init.commands.executeCommand(new PointCoordinatesCommand(point, init.scene));
+    init.rayCaster.Disable();
+    init.selection.Enable();
+    init.unSelect();
+    init.rayCaster.off('OnePointSelected');
+    document.removeEventListener('keydown', stop);
+  });
+}
 
 /**
  * Key board shortcuts
  */
-document.addEventListener('keydown', function(event)
-{	  
-  if(event.key === "Delete") {  Delete(); }
-  if(event.key === "z" && event.ctrlKey){		Undo();	}
-  if(event.key === "y" && event.ctrlKey){		Redo();	}
-  if( event.key === "Z" && event.shiftKey && event.ctrlKey){	Redo();	}
+document.addEventListener('keydown', function (event) {
+  if (event.key === "Delete") {
+    Delete();
+  }
+  if (event.key === "z" && event.ctrlKey) {
+    Undo();
+  }
+  if (event.key === "y" && event.ctrlKey) {
+    Redo();
+  }
+  if (event.key === "Z" && event.shiftKey && event.ctrlKey) {
+    Redo();
+  }
 });
 
 //#endregion
@@ -113295,35 +112564,41 @@ document.addEventListener('keydown', function(event)
 /**
  * Undo
  */
- document.getElementById("Undo").onclick=function(){Undo();};
-function Undo()
-{
-   // unselect all selected elements
-   init.unSelect();
-   // undo last command
-   init.commands.undoCommand();
+document.getElementById("Undo").onclick = function () {
+  Undo();
+};
+
+function Undo() {
+  // unselect all selected elements
+  init.unSelect();
+  // undo last command
+  init.commands.undoCommand();
 }
 
 
 /**
  * Redo
  */
- document.getElementById("Redo").onclick=function(){Redo();};
-function Redo()
-{
-   // unselect all selected elements
-   init.unSelect();
-   // redo last undo
-   init.commands.redoCommand();
+document.getElementById("Redo").onclick = function () {
+  Redo();
+};
+
+function Redo() {
+  // unselect all selected elements
+  init.unSelect();
+  // redo last undo
+  init.commands.redoCommand();
 }
 
 
- /**
-  * Delete
-  */
-  document.getElementById("delete-button").onclick=function(){Delete();};
-function Delete()
-{
+/**
+ * Delete
+ */
+document.getElementById("delete-button").onclick = function () {
+  Delete();
+};
+
+function Delete() {
   let selectedElements = [...init.SelectedObjects.selectedObjectsList];
   // unselect all selected elements
   init.unSelect();
@@ -113332,22 +112607,48 @@ function Delete()
 }
 
 /**
-  * Hide/Show
-  */
- document.getElementById("hide-button").onclick=function(){Hide();};
- function Hide()
- {
-   let selectedElements = [...init.SelectedObjects.selectedObjectsList];
-   if (!init.AllowHide || selectedElements.length > 0)
-   {
-     init.AllowHide = true;
-   }  
-   else init.AllowHide = false;
-   // unselect all selected elements
-   init.unSelect();
-   // Delete element, call delete command
-   Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.AllowHide);
- }
+ * Hide/Show
+ */
+document.getElementById("hide-button").onclick = function () {
+  Hide();
+};
+
+function Hide() {
+  let selectedElements = [...init.SelectedObjects.selectedObjectsList];
+  if (!init.AllowHide || selectedElements.length > 0) {
+    init.AllowHide = true;
+  } else init.AllowHide = false;
+  // unselect all selected elements
+  init.unSelect();
+  Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.AllowHide);
+}
+
+document.getElementById("verticalSeparator");
+
+init.canvas.addEventListener('mousemove', onDocumentMouseMove, false);
+function onDocumentMouseMove(event) {
+  event.preventDefault();
+  mouse.x = (event.clientX / window.innerWidth); 
+  mouse.y = (event.clientY / window.innerHeight); 
+  let newCamera = init.cameraList.find(c => c.isMouseOver(mouse.x, mouse.y) != null);
+
+  if (newCamera != null)
+  {
+    init.cameraList.forEach(c => c.controls.enabled = false);
+      newCamera.controls.enabled = true;
+      init.camera = newCamera;
+      init.rayCaster.camera = newCamera;
+      init.selection.camera = newCamera;
+  }
+}
+
+document.getElementById("Split-Screen").onclick = function () {splitScreen();};
+function splitScreen()
+{
+  console.log('split');
+  const newCamera = new AddNewCamera(init.sizes, init.scene, init.canvas, false, init.cameraList, false);
+  newCamera.execute();
+}
 
 //#endregion
 
@@ -113355,14 +112656,12 @@ function Delete()
 /**
  * Helper Methods
  */
-function stop(event)
-{
-  if(event.key === "Escape") 
-  {
+function stop(event) {
+  if (event.key === "Escape") {
     init.rayCaster.Disable();
     init.selection.Enable();
     init.rayCaster.pointsList = [];
-    dialog.close(); 
+    dialog.close();
   }
 }
 

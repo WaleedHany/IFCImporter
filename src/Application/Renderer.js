@@ -50,10 +50,10 @@ export default class Renderer
         else {
             for (const camera of this.application.cameraList)
             {
-                let left = 2 + (camera.x * this.sizes.width)
-                let bottom = 2 + this.sizes.height - ((camera.heightRatio * this.sizes.height) + (camera.y * this.sizes.height));
-                let width = camera.widthRatio * this.sizes.width - 2;
-                let height = camera.heightRatio * this.sizes.height - 2;
+                let left = (camera.x * this.sizes.width)
+                let bottom = this.sizes.height - ((camera.heightRatio * this.sizes.height) + (camera.y * this.sizes.height));
+                let width = camera.widthRatio * this.sizes.width;
+                let height = camera.heightRatio * this.sizes.height;
                 this.instance.setViewport (left,bottom,width,height);
                 this.instance.setScissor(left,bottom,width,height);
                 this.instance.setScissorTest (true);

@@ -194,7 +194,7 @@ export default class Selection
                 instance.selectMaterial,
                 event.shiftKey? true:false,
                 instance.selectAll )
-          instance.#UpdateMousePosition(event)
+            instance.#UpdateMousePosition(event)
             instance.selection.startPoint.set(
                 instance.mouse.x,
                 instance.mouse.y,

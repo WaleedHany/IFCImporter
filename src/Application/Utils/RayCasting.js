@@ -1,6 +1,6 @@
 import { Raycaster, Vector2, Vector3, Mesh, MeshBasicMaterial, 
          Triangle, PerspectiveCamera, RingGeometry, EdgesGeometry, 
-         BufferGeometry, Line, LineBasicMaterial, Camera} from "three";
+         BufferGeometry, Line, LineBasicMaterial} from "three";
 import EventEmitter from "./EventEmitter";
 
 const tempMouse = new Vector2()

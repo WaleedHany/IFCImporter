@@ -32,6 +32,8 @@ export default class Camera
             let aspect = this.sizes.width / this.sizes.height
             this.instance = new THREE.OrthographicCamera(-80, 80, 80 / aspect, -80 / aspect, -1000, 2000)
             this.instance.position.set(0, 1, 0)
+            if (Camera.numberOfScreens == 1) this.instance.position.set(0, 0, 1)
+            if (Camera.numberOfScreens == 3)this.instance.position.set(1, 0, 0)
         }
         this.instance.up.set(0,0,1)
         this.scene.add(this.instance)
@@ -42,6 +44,7 @@ export default class Camera
         CameraControls.install({THREE: THREE})
         this.controls = new CameraControls(this.instance, this.canvas)
         this.controls.dampingFactor = 0.1
+        this.controls.zoomSpeed  = 0.1
         this.controls.dollyToCursor = true
         this.controls.infinityDolly = true
         this.controls.mouseButtons.left = CameraControls.ACTION.NONE
@@ -50,7 +53,7 @@ export default class Camera
       //  this.controls.boundaryEnclosesCamera
     }
 
-    setBoundaries(x, y, w, h)
+    setBoundaries(x, y, w, h, adjustPosition = true)
     {
         this.x = x
         this.y = y
@@ -59,10 +62,10 @@ export default class Camera
         this.widthRatio = this.width/this.sizes.width
         this.heightRatio = this.height / this.sizes.height
         this.instance.aspect = this.widthRatio/this.heightRatio
-        this.setFieldOfView(x, y, w, h)
+        this.setFieldOfView(x, y, w, h, adjustPosition)
     }
 
-    setFieldOfView(x, y, w, h)
+    setFieldOfView(x, y, w, h, adjustPosition = true)
     { 
         let xValue = x * this.sizes.width
         let yValue = y * this.sizes.height
@@ -71,7 +74,7 @@ export default class Camera
             yValue >= 0 && (yValue + h) <= this.sizes.height)
         {
             this.instance.setViewOffset(this.sizes.width, this.sizes.height, x * this.sizes.width, y * this.sizes.height, w, h);
-            if(Camera.numberOfScreens > 1) this.getNewCameraPosition(x,y, this.instance.zoom)
+            if(Camera.numberOfScreens > 1 && adjustPosition) this.getNewCameraPosition(x,y, this.instance.zoom)
         }   
         this.instance.updateProjectionMatrix()
     }

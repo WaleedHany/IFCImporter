@@ -52721,6 +52721,8 @@ class Camera
             let aspect = this.sizes.width / this.sizes.height;
             this.instance = new OrthographicCamera(-80, 80, 80 / aspect, -80 / aspect, -1000, 2000);
             this.instance.position.set(0, 1, 0);
+            if (Camera.numberOfScreens == 1) this.instance.position.set(0, 0, 1);
+            if (Camera.numberOfScreens == 3)this.instance.position.set(1, 0, 0);
         }
         this.instance.up.set(0,0,1);
         this.scene.add(this.instance);
@@ -52731,6 +52733,7 @@ class Camera
         CameraControls.install({THREE: THREE$1});
         this.controls = new CameraControls(this.instance, this.canvas);
         this.controls.dampingFactor = 0.1;
+        this.controls.zoomSpeed  = 0.1;
         this.controls.dollyToCursor = true;
         this.controls.infinityDolly = true;
         this.controls.mouseButtons.left = CameraControls.ACTION.NONE;
@@ -52739,7 +52742,7 @@ class Camera
       //  this.controls.boundaryEnclosesCamera
     }
 
-    setBoundaries(x, y, w, h)
+    setBoundaries(x, y, w, h, adjustPosition = true)
     {
         this.x = x;
         this.y = y;
@@ -52748,10 +52751,10 @@ class Camera
         this.widthRatio = this.width/this.sizes.width;
         this.heightRatio = this.height / this.sizes.height;
         this.instance.aspect = this.widthRatio/this.heightRatio;
-        this.setFieldOfView(x, y, w, h);
+        this.setFieldOfView(x, y, w, h, adjustPosition);
     }
 
-    setFieldOfView(x, y, w, h)
+    setFieldOfView(x, y, w, h, adjustPosition = true)
     { 
         let xValue = x * this.sizes.width;
         let yValue = y * this.sizes.height;
@@ -52760,7 +52763,7 @@ class Camera
             yValue >= 0 && (yValue + h) <= this.sizes.height)
         {
             this.instance.setViewOffset(this.sizes.width, this.sizes.height, x * this.sizes.width, y * this.sizes.height, w, h);
-            if(Camera.numberOfScreens > 1) this.getNewCameraPosition(x,y, this.instance.zoom);
+            if(Camera.numberOfScreens > 1 && adjustPosition) this.getNewCameraPosition(x,y, this.instance.zoom);
         }   
         this.instance.updateProjectionMatrix();
     }
@@ -52894,10 +52897,10 @@ class Renderer
         else {
             for (const camera of this.application.cameraList)
             {
-                let left = 2 + (camera.x * this.sizes.width);
-                let bottom = 2 + this.sizes.height - ((camera.heightRatio * this.sizes.height) + (camera.y * this.sizes.height));
-                let width = camera.widthRatio * this.sizes.width - 2;
-                let height = camera.heightRatio * this.sizes.height - 2;
+                let left = (camera.x * this.sizes.width);
+                let bottom = this.sizes.height - ((camera.heightRatio * this.sizes.height) + (camera.y * this.sizes.height));
+                let width = camera.widthRatio * this.sizes.width;
+                let height = camera.heightRatio * this.sizes.height;
                 this.instance.setViewport (left,bottom,width,height);
                 this.instance.setScissor(left,bottom,width,height);
                 this.instance.setScissorTest (true);
@@ -110402,7 +110405,7 @@ class Selection
                 instance$2.selectMaterial,
                 event.shiftKey? true:false,
                 instance$2.selectAll );
-          instance$2.#UpdateMousePosition(event);
+            instance$2.#UpdateMousePosition(event);
             instance$2.selection.startPoint.set(
                 instance$2.mouse.x,
                 instance$2.mouse.y,
@@ -112201,6 +112204,7 @@ class Hide_ShowElementCommand
 }
 
 class AddNewCamera extends Command {
+
   static number = 0
   constructor(sizes, scene, canvas, isPrespective, cameraList, isVerticalSplit) {
     super();
@@ -112210,6 +112214,10 @@ class AddNewCamera extends Command {
     this.isPrespective = isPrespective;
     this.cameraList = cameraList;
     this.isVerticalSplit = isVerticalSplit;
+    this.mouseX = 0;
+    this.mouseY = 0;
+    this.deltaX = 0;
+    this.deltaY = 0;
     AddNewCamera.number += 1;
   }
 
@@ -112233,9 +112241,7 @@ class AddNewCamera extends Command {
         cameraToSplit.setBoundaries(x, y, w, h);
         let nx = x + (cameraToSplit.widthRatio);
         this.camera.setBoundaries(nx, y, w, h);
-      }
-      else
-      {
+      } else {
         let h = cameraToSplit.height / 2;
         let w = cameraToSplit.width;
         cameraToSplit.setBoundaries(x, y, w, h);
@@ -112243,32 +112249,103 @@ class AddNewCamera extends Command {
         this.camera.setBoundaries(x, ny, w, h);
       }
       this.addDiv();
+      this.camera.div = this.div;
       this.cameraList.forEach(c => c.controls.enabled = false);
+
     }
   }
 
-  addDiv() 
+  addDiv()
   {
     this.div = document.createElement('div');
-
-    if (this.isVerticalSplit)
-    {
+    if (this.isVerticalSplit) {
       this.div.style.borderLeft = "3px solid rgb(144, 194, 235)";
       this.div.style.height = this.camera.height + 'px';
-    }     
-    else
-    {
+    }
+    else {
       this.div.style.borderBottom = "3px solid rgb(144, 194, 235)";
       this.div.style.width = this.camera.width + 'px';
-    }  
-    
-    this.div.style.top = (this.camera.y * this.camera.sizes.height) + 'px';
+    }
+    this.div.style.top = (this.camera.y * this.camera.sizes.height) - 1 + 'px';
     this.div.style.left = (this.camera.x * this.camera.sizes.width) + 'px';
-    
+
     this.div.style.cursor = 'move';
     this.div.style.opacity = '0.4';
     this.div.style.position = 'fixed';
     document.body.appendChild(this.div);
+    this.div.object = this;
+    this.div.onmousedown = this.dragMouseDown;
+    return this.div
+  }
+
+  dragMouseDown(event) {
+    event.preventDefault();
+    let that = event.currentTarget.object;
+    // get the mouse cursor position at startup:
+    that.mouseX = event.clientX;
+    that.mouseY = event.clientY;
+    that.div.onmouseup = that.closeDragElement;
+    // call a function whenever the cursor moves:
+    that.canvas.object = that;
+    that.canvas.onmousemove = that.elementDrag;
+  }
+
+  elementDrag(e) {
+    e.preventDefault();
+    let that = e.currentTarget.object;
+    // calculate the new cursor position:
+    that.deltaX = that.mouseX - e.clientX;
+    that.deltaY = that.mouseY - e.clientY;
+    that.mouseX = e.clientX;
+    that.mouseY = e.clientY;
+    if (that.isVerticalSplit) {
+      that.div.style.left = (that.div.offsetLeft - that.deltaX) + "px";
+      for (let camera of that.cameraList) {
+        let midPointY = camera.y + (camera.heightRatio / 2);
+        if (midPointY * camera.sizes.height >= that.div.offsetTop &&
+          midPointY * camera.sizes.height <= (that.div.offsetTop + that.div.offsetHeight)) {
+          let x = that.div.offsetLeft / camera.sizes.width;
+          if (Math.abs(x - camera.x) < Math.abs(x - (camera.x + camera.widthRatio))) {
+            camera.setBoundaries(x, camera.y, (1 - x) * camera.sizes.width, camera.height, false);
+          } else {
+            camera.setBoundaries(camera.x, camera.y, (camera.x + x) * camera.sizes.width, camera.height, false);
+          }
+          if (camera.div != null && camera.div.offsetWidth < camera.sizes.width && camera.div.offsetWidth > camera.div.offsetHeight) {
+            camera.div.style.left = (camera.x * camera.sizes.width) + 'px';
+            camera.div.style.width = camera.width + 'px';
+          }
+        }
+      }
+    }               
+    else {
+      that.div.style.top = (that.div.offsetTop - that.deltaY) + "px";
+      for (let camera of that.cameraList) {
+        let midPointX = camera.x + (camera.widthRatio / 2);
+        if (midPointX * camera.sizes.width >= that.div.offsetLeft &&
+          midPointX * camera.sizes.width <= (that.div.offsetLeft + that.div.offsetWidth)) {
+          let y = that.div.offsetTop / camera.sizes.height;
+          if (Math.abs(y - camera.y) < Math.abs(y - (camera.y + camera.heightRatio))) {
+            
+            camera.setBoundaries(camera.x, y, camera.width, (1 - y) * camera.sizes.height, false);
+          }
+          else {
+            camera.setBoundaries(camera.x, camera.y, camera.width, (camera.y + y) * camera.sizes.height, false);
+          }
+          if (camera.div != null && camera.div.offsetHeight < camera.sizes.height && camera.div.offsetHeight > camera.div.offsetWidth)
+          {
+            camera.div.style.Top = (camera.y * camera.sizes.height) + 'px';
+            camera.div.style.height = camera.height + 'px';
+          } 
+        }
+      }
+    }
+
+  }
+
+  closeDragElement(e) {
+    // stop moving when mouse button is released:
+    e.currentTarget.object.div.onmouseup = null;
+    e.currentTarget.object.canvas.onmousemove = null;
   }
 
   // undo()

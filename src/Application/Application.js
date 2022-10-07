@@ -127,6 +127,17 @@ export default class Initialization
         }();
     }
 
+    resetCamera()
+    {
+        if (this.cameraList.length > 0)
+        {
+            this.camera = this.cameraList[0]
+            this.renderer.camera = this.camera
+            this.selection.camera = this.camera
+        }
+        
+    }
+
     resize()
     {
         this.camera.resize()

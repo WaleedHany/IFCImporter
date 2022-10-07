@@ -74,7 +74,7 @@ export default class Camera
             yValue >= 0 && (yValue + h) <= this.sizes.height)
         {
             this.instance.setViewOffset(this.sizes.width, this.sizes.height, x * this.sizes.width, y * this.sizes.height, w, h);
-            if(Camera.numberOfScreens > 1 && adjustPosition) this.getNewCameraPosition(x,y, this.instance.zoom)
+            if(adjustPosition) this.getNewCameraPosition(x,y, this.instance.zoom)
         }   
         this.instance.updateProjectionMatrix()
     }
@@ -155,5 +155,19 @@ export default class Camera
     {
         const delta = clock.getDelta()
         this.controls.update(delta)
+    }
+
+    dispose()
+    {
+        if (Camera.numberOfScreens > 1)
+        {
+            Camera.numberOfScreens -= 1
+            this.scene.remove(this.instance)
+            this.instance.clearViewOffset()
+            this.instance.clear()
+            this.instance = null
+            this.controls.dispose()
+            this.controls = null
+        }
     }
 }

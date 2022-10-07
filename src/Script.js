@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import Initialization from './Application/Application.js'
 import LoadIfcCommand from './Application/Commands/LoadIfcCommand.js'
 import MoveElementCommand from './Application/Commands/MoveElementsCommand.js'
@@ -5,12 +6,11 @@ import CopyElementCommand from './Application/Commands/CopyElementCommand.js'
 import DimentionBetweenTwoPoints from './Application/Commands/DimentionBetweenTwoPoints.js'
 import DimentionBetweenLineAndPoint from './Application/Commands/DimentionBetweenLineAndPoint.js'
 import PointCoordinatesCommand from './Application/Commands/PointCoordinatesCommand.js'
-import * as THREE from 'three'
 import DeleteCommand from './Application/Commands/DeleteCommand.js'
 import RotateElementCommand from './Application/Commands/RotateElementsCommand.js'
 import Hide_ShowElementCommand from './Application/Commands/HideElementCommand.js'
 import AddNewCamera from './Application/Commands/AddNewCamera.js'
-
+import ShowSingleScreen from './Application/Commands/ShowSingleScreen.js'
 /**
  * Program Initialization
  */
@@ -297,8 +297,6 @@ document.addEventListener('keydown', function (event) {
 
 //#endregion
 
-
-
 /**
  * Methods
  */
@@ -366,9 +364,7 @@ function Hide() {
   Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.AllowHide)
 }
 
-const verticalSeparator = document.getElementById("verticalSeparator")
 
-init.canvas.addEventListener('mousemove', onDocumentMouseMove, false);
 function onDocumentMouseMove(event) {
   event.preventDefault();
   mouse.x = (event.clientX / window.innerWidth) 
@@ -388,8 +384,20 @@ function onDocumentMouseMove(event) {
 document.getElementById("Split-Screen").onclick = function () {splitScreen()};
 function splitScreen()
 {
-  const newCamera = new AddNewCamera(init.sizes, init.scene, init.canvas, false, init.cameraList, true)
-  newCamera.execute()
+  init.canvas.addEventListener('mousemove', onDocumentMouseMove, false);
+  init.commands.executeCommand(new AddNewCamera(init.sizes, init.scene, init.canvas, false, init.cameraList, init, true))
+}
+
+document.getElementById("full-Screen").onclick = function () {fullScreen()};
+function fullScreen()
+{
+  if (init.cameraList.length > 1)
+  {
+    init.canvas.removeEventListener('mousemove', onDocumentMouseMove, false);
+    init.resetCamera()
+    const fullScreenCommand = new ShowSingleScreen(init);
+    fullScreenCommand.execute()
+  }
 }
 
 //#endregion

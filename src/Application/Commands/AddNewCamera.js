@@ -1,15 +1,15 @@
 import Command from "./Command.js";
 import Camera from "../Camera.js"
-import { ColorController } from "lil-gui";
 
 export default class AddNewCamera extends Command {
 
   static number = 0
-  constructor(sizes, scene, canvas, isPrespective, cameraList, isVerticalSplit) {
+  constructor(sizes, scene, canvas, isPrespective, cameraList, init, isVerticalSplit) {
     super()
     this.sizes = sizes
     this.scene = scene
     this.canvas = canvas
+    this.init = init
     this.isPrespective = isPrespective
     this.cameraList = cameraList
     this.isVerticalSplit = isVerticalSplit
@@ -21,7 +21,6 @@ export default class AddNewCamera extends Command {
   }
 
   execute() {
-    console.log(this.isVerticalSplit)
     if (Camera.numberOfScreens < 4) {
       if (AddNewCamera.number == 2 || AddNewCamera.number == 3) {
         if (this.isVerticalSplit) this.isVerticalSplit = false
@@ -40,7 +39,8 @@ export default class AddNewCamera extends Command {
         cameraToSplit.setBoundaries(x, y, w, h)
         let nx = x + (cameraToSplit.widthRatio)
         this.camera.setBoundaries(nx, y, w, h)
-      } else {
+      }
+      else {
         let h = cameraToSplit.height / 2
         let w = cameraToSplit.width
         cameraToSplit.setBoundaries(x, y, w, h)
@@ -147,18 +147,37 @@ export default class AddNewCamera extends Command {
     e.currentTarget.object.canvas.onmousemove = null;
   }
 
-  // undo()
-  // {
+  undo()
+  {
+    let width  = this.camera.width
+    let height = this.camera.height
+    if (this.isVerticalSplit){
+      let newWidthRatio = (this.camera.parentCamera.width + this.camera.width) / this.sizes.width
+      width = newWidthRatio  <= 1 ? newWidthRatio  * this.sizes.width  : this.sizes.width
+    }
+    else {
+      let newHeightRatio = (this.camera.parentCamera.height + this.camera.height) / this.sizes.height
+     
+      height = newHeightRatio <= 1 ? newHeightRatio * this.sizes.height : this.sizes.height
+   }
+    
+    this.camera.parentCamera.setBoundaries(this.camera.parentCamera.x, this.camera.parentCamera.y, width, height)
+    if (this.div != null) this.div.remove()
+    this.div = null
+    const index = this.cameraList.indexOf(this.camera);
+    if (index > -1) this.cameraList.splice(index, 1)
+    AddNewCamera.number -= 1
+    this.init.resetCamera()
+    this.camera.dispose()
+  }
 
-  // }
+  redo()
+  {
+    this.execute()
+  }
 
-  // redo()
-  // {
-
-  // }
-
-  // remove()
-  // {
-
-  // }
+  remove()
+  {
+    // No change should be done
+  }
 }

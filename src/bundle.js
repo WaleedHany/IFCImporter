@@ -52763,7 +52763,7 @@ class Camera
             yValue >= 0 && (yValue + h) <= this.sizes.height)
         {
             this.instance.setViewOffset(this.sizes.width, this.sizes.height, x * this.sizes.width, y * this.sizes.height, w, h);
-            if(Camera.numberOfScreens > 1 && adjustPosition) this.getNewCameraPosition(x,y, this.instance.zoom);
+            if(adjustPosition) this.getNewCameraPosition(x,y, this.instance.zoom);
         }   
         this.instance.updateProjectionMatrix();
     }
@@ -52845,6 +52845,20 @@ class Camera
         const delta = clock.getDelta();
         this.controls.update(delta);
     }
+
+    dispose()
+    {
+        if (Camera.numberOfScreens > 1)
+        {
+            Camera.numberOfScreens -= 1;
+            this.scene.remove(this.instance);
+            this.instance.clearViewOffset();
+            this.instance.clear();
+            this.instance = null;
+            this.controls.dispose();
+            this.controls = null;
+        }
+    }
 }
 
 new Vector2();
@@ -52858,7 +52872,6 @@ class Renderer
         this.scene = scene;
         this.application = application;
         this.camera = camera;
-        this.application.cameraList.forEach(c => { c.controls.enabled = false; });
         this.setInstance();
     }
 
@@ -52890,8 +52903,9 @@ class Renderer
 
     update()
     {
-        if (this.application.cameraList.count == 1)
+        if (this.application.cameraList.cont == 1)
         {
+            this.instance.setScissorTest (false);
             this.instance.render(this.scene, this.camera.instance);
         }
         else {
@@ -111088,6 +111102,17 @@ class Initialization
         }();
     }
 
+    resetCamera()
+    {
+        if (this.cameraList.length > 0)
+        {
+            this.camera = this.cameraList[0];
+            this.renderer.camera = this.camera;
+            this.selection.camera = this.camera;
+        }
+        
+    }
+
     resize()
     {
         this.camera.resize();
@@ -112206,11 +112231,12 @@ class Hide_ShowElementCommand
 class AddNewCamera extends Command {
 
   static number = 0
-  constructor(sizes, scene, canvas, isPrespective, cameraList, isVerticalSplit) {
+  constructor(sizes, scene, canvas, isPrespective, cameraList, init, isVerticalSplit) {
     super();
     this.sizes = sizes;
     this.scene = scene;
     this.canvas = canvas;
+    this.init = init;
     this.isPrespective = isPrespective;
     this.cameraList = cameraList;
     this.isVerticalSplit = isVerticalSplit;
@@ -112222,7 +112248,6 @@ class AddNewCamera extends Command {
   }
 
   execute() {
-    console.log(this.isVerticalSplit);
     if (Camera.numberOfScreens < 4) {
       if (AddNewCamera.number == 2 || AddNewCamera.number == 3) {
         if (this.isVerticalSplit) this.isVerticalSplit = false;
@@ -112241,7 +112266,8 @@ class AddNewCamera extends Command {
         cameraToSplit.setBoundaries(x, y, w, h);
         let nx = x + (cameraToSplit.widthRatio);
         this.camera.setBoundaries(nx, y, w, h);
-      } else {
+      }
+      else {
         let h = cameraToSplit.height / 2;
         let w = cameraToSplit.width;
         cameraToSplit.setBoundaries(x, y, w, h);
@@ -112348,26 +112374,73 @@ class AddNewCamera extends Command {
     e.currentTarget.object.canvas.onmousemove = null;
   }
 
-  // undo()
-  // {
+  undo()
+  {
+    let width  = this.camera.width;
+    let height = this.camera.height;
+    if (this.isVerticalSplit){
+      let newWidthRatio = (this.camera.parentCamera.width + this.camera.width) / this.sizes.width;
+      width = newWidthRatio  <= 1 ? newWidthRatio  * this.sizes.width  : this.sizes.width;
+    }
+    else {
+      let newHeightRatio = (this.camera.parentCamera.height + this.camera.height) / this.sizes.height;
+     
+      height = newHeightRatio <= 1 ? newHeightRatio * this.sizes.height : this.sizes.height;
+   }
+    
+    this.camera.parentCamera.setBoundaries(this.camera.parentCamera.x, this.camera.parentCamera.y, width, height);
+    if (this.div != null) this.div.remove();
+    this.div = null;
+    const index = this.cameraList.indexOf(this.camera);
+    if (index > -1) this.cameraList.splice(index, 1);
+    AddNewCamera.number -= 1;
+    this.init.resetCamera();
+    this.camera.dispose();
+  }
 
-  // }
+  redo()
+  {
+    this.execute();
+  }
 
-  // redo()
-  // {
+  remove()
+  {
+    // No change should be done
+  }
+}
 
-  // }
+class ShowSingleScreen {
 
-  // remove()
-  // {
+  constructor(init)
+  {
+    this.sizes = init.sizes;
+    this.cameraList = init.cameraList;
+  }
 
-  // }
+  execute()
+  {
+    let num = this.cameraList.length -1;
+    let mainCamera = this.cameraList[0];  
+    init.resetCamera();
+    for (let i = num; i > 0; i--)
+    {
+      let camera = this.cameraList[i];
+      this.cameraList.pop();
+      if (camera.div != null) camera.div.remove();
+      camera.div = null;
+      camera.dispose();
+    }
+    mainCamera.setBoundaries(0, 0, this.sizes.width, this.sizes.height);
+    mainCamera.instance.clearViewOffset ();
+    mainCamera.controls.enabled = true;
+    mainCamera.controls.aspect = mainCamera.sizes.width/mainCamera.sizes.height;
+  }
 }
 
 /**
  * Program Initialization
  */
-const init = new Initialization(document.querySelector('canvas.webgl'));
+const init$1 = new Initialization(document.querySelector('canvas.webgl'));
 let dialog = document.getElementById('location-dialog-form');
 const mouse = new Vector2(0,0);
 /**
@@ -112387,8 +112460,8 @@ input.addEventListener("change", (changed) => {
     } else {
       return
     }
-    let position = new Vector3(init.positionVariables.positionX, init.positionVariables.positionY, init.positionVariables.positionZ);
-    init.commands.executeCommand(new LoadIfcCommand(ifcURL, position));
+    let position = new Vector3(init$1.positionVariables.positionX, init$1.positionVariables.positionY, init$1.positionVariables.positionZ);
+    init$1.commands.executeCommand(new LoadIfcCommand(ifcURL, position));
   },
   false);
 
@@ -112405,12 +112478,12 @@ function ModelLocationDialog() {
   //document.getElementById('show').onclick = function() {    
   dialog.show();
   document.getElementById('Ok').onclick = function () {
-    init.positionVariables.positionX = parseFloat(document.getElementById('positionX').value);
-    init.positionVariables.positionY = parseFloat(document.getElementById('positionY').value);
-    init.positionVariables.positionZ = parseFloat(document.getElementById('positionZ').value);
-    document.getElementById('positionX').innerHTML = init.positionVariables.positionX;
-    document.getElementById('positionY').innerHTML = init.positionVariables.positionY;
-    document.getElementById('positionZ').innerHTML = init.positionVariables.positionZ;
+    init$1.positionVariables.positionX = parseFloat(document.getElementById('positionX').value);
+    init$1.positionVariables.positionY = parseFloat(document.getElementById('positionY').value);
+    init$1.positionVariables.positionZ = parseFloat(document.getElementById('positionZ').value);
+    document.getElementById('positionX').innerHTML = init$1.positionVariables.positionX;
+    document.getElementById('positionY').innerHTML = init$1.positionVariables.positionY;
+    document.getElementById('positionZ').innerHTML = init$1.positionVariables.positionZ;
     dialog.close();
   };
 }
@@ -112423,9 +112496,9 @@ document.getElementById("move-button").onclick = function () {
 };
 
 function MoveElementDialog() {
-  if (init.SelectedObjects.selectedObjectsList.length > 0) {
-    init.selection.Disable();
-    init.rayCaster.Enable();
+  if (init$1.SelectedObjects.selectedObjectsList.length > 0) {
+    init$1.selection.Disable();
+    init$1.rayCaster.Enable();
     dialog = document.getElementById('location-dialog-form');
     document.getElementById('dialog-form-title').innerHTML = "Move Element";
     //document.getElementById('show').onclick = function() {    
@@ -112437,25 +112510,25 @@ function MoveElementDialog() {
       const deltaX = parseFloat(document.getElementById('positionX').value);
       const deltaY = parseFloat(document.getElementById('positionY').value);
       const deltaZ = parseFloat(document.getElementById('positionZ').value);
-      init.commands.executeCommand(new MoveElementCommand(init.SelectedObjects.selectedObjectsList, deltaX, deltaY, deltaZ));
+      init$1.commands.executeCommand(new MoveElementCommand(init$1.SelectedObjects.selectedObjectsList, deltaX, deltaY, deltaZ));
       dialog.close();
-      init.rayCaster.Disable();
-      init.selection.Enable();
-      init.unSelect();
+      init$1.rayCaster.Disable();
+      init$1.selection.Enable();
+      init$1.unSelect();
       document.getElementById('positionX').innerHTML = 0;
       document.getElementById('positionY').innerHTML = 0;
       document.getElementById('positionZ').innerHTML = 0;
-      init.rayCaster.off('TwoPointsSelected');
+      init$1.rayCaster.off('TwoPointsSelected');
       document.removeEventListener('keydown', stop);
     };
-    init.rayCaster.on('TwoPointsSelected', () => {
-      let vector = init.rayCaster.pointsList[1].sub(init.rayCaster.pointsList[0]);
-      init.rayCaster.Disable();
-      init.selection.Enable();
-      init.commands.executeCommand(new MoveElementCommand(init.SelectedObjects.selectedObjectsList, vector.x, vector.y, vector.z));
+    init$1.rayCaster.on('TwoPointsSelected', () => {
+      let vector = init$1.rayCaster.pointsList[1].sub(init$1.rayCaster.pointsList[0]);
+      init$1.rayCaster.Disable();
+      init$1.selection.Enable();
+      init$1.commands.executeCommand(new MoveElementCommand(init$1.SelectedObjects.selectedObjectsList, vector.x, vector.y, vector.z));
       dialog.close();
-      init.unSelect();
-      init.rayCaster.off('TwoPointsSelected');
+      init$1.unSelect();
+      init$1.rayCaster.off('TwoPointsSelected');
       document.removeEventListener('keydown', stop);
     });
   }
@@ -112469,9 +112542,9 @@ document.getElementById("copy-button").onclick = function () {
 };
 
 function CopyElementDialog() {
-  if (init.SelectedObjects.selectedObjectsList.length > 0) {
-    init.selection.Disable();
-    init.rayCaster.Enable();
+  if (init$1.SelectedObjects.selectedObjectsList.length > 0) {
+    init$1.selection.Disable();
+    init$1.rayCaster.Enable();
     dialog = document.getElementById('location-dialog-form');
     document.getElementById('dialog-form-title').innerHTML = "Copy Element";
     dialog.show();
@@ -112481,28 +112554,28 @@ function CopyElementDialog() {
       const deltaX = parseFloat(document.getElementById('positionX').value);
       const deltaY = parseFloat(document.getElementById('positionY').value);
       const deltaZ = parseFloat(document.getElementById('positionZ').value);
-      init.commands.executeCommand(new CopyElementCommand(init.SelectedObjects.selectedObjectsList,
-        deltaX, deltaY, deltaZ, init.scene, init.importedModels));
-      init.unSelect();
+      init$1.commands.executeCommand(new CopyElementCommand(init$1.SelectedObjects.selectedObjectsList,
+        deltaX, deltaY, deltaZ, init$1.scene, init$1.importedModels));
+      init$1.unSelect();
       dialog.close();
       document.getElementById('positionX').innerHTML = 0;
       document.getElementById('positionY').innerHTML = 0;
       document.getElementById('positionZ').innerHTML = 0;
-      init.rayCaster.off('TwoPointsSelected');
+      init$1.rayCaster.off('TwoPointsSelected');
       document.removeEventListener('keydown', stop);
-      init.rayCaster.Disable();
-      init.selection.Enable();
+      init$1.rayCaster.Disable();
+      init$1.selection.Enable();
     };
 
-    init.rayCaster.on('TwoPointsSelected', () => {
-      let vector = init.rayCaster.pointsList[1].sub(init.rayCaster.pointsList[0]);
-      init.rayCaster.Disable();
-      init.selection.Enable();
-      init.commands.executeCommand(new CopyElementCommand(init.SelectedObjects.selectedObjectsList,
-        vector.x, vector.y, vector.z, init.scene, init.importedModels));
+    init$1.rayCaster.on('TwoPointsSelected', () => {
+      let vector = init$1.rayCaster.pointsList[1].sub(init$1.rayCaster.pointsList[0]);
+      init$1.rayCaster.Disable();
+      init$1.selection.Enable();
+      init$1.commands.executeCommand(new CopyElementCommand(init$1.SelectedObjects.selectedObjectsList,
+        vector.x, vector.y, vector.z, init$1.scene, init$1.importedModels));
       dialog.close();
-      init.unSelect();
-      init.rayCaster.off('TwoPointsSelected');
+      init$1.unSelect();
+      init$1.rayCaster.off('TwoPointsSelected');
       document.removeEventListener('keydown', stop);
     });
   }
@@ -112521,10 +112594,10 @@ function RotateElementDialog() {
   dialog.show();
   document.getElementById('Ok-rotation').onclick = function () {
     const deltaZ = parseFloat(document.getElementById('rotationZ').value) * (Math.PI / 180);
-    init.commands.executeCommand(new RotateElementCommand(init.SelectedObjects.selectedObjectsList, 0, 0, deltaZ));
-    init.rayCaster.Disable();
-    init.selection.Enable();
-    init.unSelect();
+    init$1.commands.executeCommand(new RotateElementCommand(init$1.SelectedObjects.selectedObjectsList, 0, 0, deltaZ));
+    init$1.rayCaster.Disable();
+    init$1.selection.Enable();
+    init$1.unSelect();
     dialog.close();
     document.getElementById('rotationZ').innerHTML = "0";
   };
@@ -112538,16 +112611,16 @@ document.getElementById("Points-dimentions").onclick = function () {
 };
 
 function AddTwoPointsDimentions() {
-  init.selection.Disable();
-  init.rayCaster.Enable();
+  init$1.selection.Disable();
+  init$1.rayCaster.Enable();
   document.addEventListener('keydown', stop);
 
-  init.rayCaster.on('TwoPointsSelected', () => {
-    init.commands.executeCommand(new DimentionBetweenTwoPoints(init.rayCaster.pointsList[0], init.rayCaster.pointsList[1], init.scene));
-    init.rayCaster.Disable();
-    init.selection.Enable();
-    init.unSelect();
-    init.rayCaster.off('TwoPointsSelected');
+  init$1.rayCaster.on('TwoPointsSelected', () => {
+    init$1.commands.executeCommand(new DimentionBetweenTwoPoints(init$1.rayCaster.pointsList[0], init$1.rayCaster.pointsList[1], init$1.scene));
+    init$1.rayCaster.Disable();
+    init$1.selection.Enable();
+    init$1.unSelect();
+    init$1.rayCaster.off('TwoPointsSelected');
     document.removeEventListener('keydown', stop);
   });
 }
@@ -112560,12 +112633,12 @@ document.getElementById("Line-Point-dimentions").onclick = function () {
 };
 
 function LinePointDimentions() {
-  init.selection.Disable();
-  init.rayCaster.Enable(true);
+  init$1.selection.Disable();
+  init$1.rayCaster.Enable(true);
   document.addEventListener('keydown', stop);
 
-  init.rayCaster.on('LineAndPointSelected', () => {
-    const lineCoordinates = init.rayCaster.Line.geometry.attributes.position.array;
+  init$1.rayCaster.on('LineAndPointSelected', () => {
+    const lineCoordinates = init$1.rayCaster.Line.geometry.attributes.position.array;
     const lineStartPoint = new Vector3(lineCoordinates[0], lineCoordinates[1], lineCoordinates[2]);
     const lineEndPoint = new Vector3(lineCoordinates[3], lineCoordinates[4], lineCoordinates[5]);
     const lineVector = lineEndPoint.clone().sub(lineStartPoint);
@@ -112573,11 +112646,11 @@ function LinePointDimentions() {
       points: [lineStartPoint, lineEndPoint],
       vector: lineVector
     };
-    init.commands.executeCommand(new DimentionBetweenLineAndPoint(line, init.rayCaster.pointsList[0], init.scene));
-    init.rayCaster.Disable();
-    init.selection.Enable();
-    init.unSelect();
-    init.rayCaster.off('LineAndPointSelected');
+    init$1.commands.executeCommand(new DimentionBetweenLineAndPoint(line, init$1.rayCaster.pointsList[0], init$1.scene));
+    init$1.rayCaster.Disable();
+    init$1.selection.Enable();
+    init$1.unSelect();
+    init$1.rayCaster.off('LineAndPointSelected');
     document.removeEventListener('keydown', stop);
   });
 }
@@ -112590,19 +112663,19 @@ document.getElementById("Line-dimentions").onclick = function () {
 };
 
 function LineDimentions() {
-  init.selection.Disable();
-  init.rayCaster.Enable(true);
+  init$1.selection.Disable();
+  init$1.rayCaster.Enable(true);
   document.addEventListener('keydown', stop);
 
-  init.rayCaster.on('LineSelected', () => {
-    const lineCoordinates = init.rayCaster.Line.geometry.attributes.position.array;
+  init$1.rayCaster.on('LineSelected', () => {
+    const lineCoordinates = init$1.rayCaster.Line.geometry.attributes.position.array;
     const lineStartPoint = new Vector3(lineCoordinates[0], lineCoordinates[1], lineCoordinates[2]);
     const lineEndPoint = new Vector3(lineCoordinates[3], lineCoordinates[4], lineCoordinates[5]);
-    init.commands.executeCommand(new DimentionBetweenTwoPoints(lineStartPoint, lineEndPoint, init.scene));
-    init.rayCaster.Disable();
-    init.selection.Enable();
-    init.unSelect();
-    init.rayCaster.off('LineSelected');
+    init$1.commands.executeCommand(new DimentionBetweenTwoPoints(lineStartPoint, lineEndPoint, init$1.scene));
+    init$1.rayCaster.Disable();
+    init$1.selection.Enable();
+    init$1.unSelect();
+    init$1.rayCaster.off('LineSelected');
     document.removeEventListener('keydown', stop);
   });
 }
@@ -112615,17 +112688,17 @@ document.getElementById("Point-Coordinates").onclick = function () {
 };
 
 function PointCoordinates() {
-  init.selection.Disable();
-  init.rayCaster.Enable();
+  init$1.selection.Disable();
+  init$1.rayCaster.Enable();
   document.addEventListener('keydown', stop);
 
-  init.rayCaster.on('OnePointSelected', () => {
-    const point = init.rayCaster.pointsList[0];
-    init.commands.executeCommand(new PointCoordinatesCommand(point, init.scene));
-    init.rayCaster.Disable();
-    init.selection.Enable();
-    init.unSelect();
-    init.rayCaster.off('OnePointSelected');
+  init$1.rayCaster.on('OnePointSelected', () => {
+    const point = init$1.rayCaster.pointsList[0];
+    init$1.commands.executeCommand(new PointCoordinatesCommand(point, init$1.scene));
+    init$1.rayCaster.Disable();
+    init$1.selection.Enable();
+    init$1.unSelect();
+    init$1.rayCaster.off('OnePointSelected');
     document.removeEventListener('keydown', stop);
   });
 }
@@ -112650,8 +112723,6 @@ document.addEventListener('keydown', function (event) {
 
 //#endregion
 
-
-
 /**
  * Methods
  */
@@ -112666,9 +112737,9 @@ document.getElementById("Undo").onclick = function () {
 
 function Undo() {
   // unselect all selected elements
-  init.unSelect();
+  init$1.unSelect();
   // undo last command
-  init.commands.undoCommand();
+  init$1.commands.undoCommand();
 }
 
 
@@ -112681,9 +112752,9 @@ document.getElementById("Redo").onclick = function () {
 
 function Redo() {
   // unselect all selected elements
-  init.unSelect();
+  init$1.unSelect();
   // redo last undo
-  init.commands.redoCommand();
+  init$1.commands.redoCommand();
 }
 
 
@@ -112695,11 +112766,11 @@ document.getElementById("delete-button").onclick = function () {
 };
 
 function Delete() {
-  let selectedElements = [...init.SelectedObjects.selectedObjectsList];
+  let selectedElements = [...init$1.SelectedObjects.selectedObjectsList];
   // unselect all selected elements
-  init.unSelect();
+  init$1.unSelect();
   // Delete element, call delete command
-  init.commands.executeCommand(new DeleteCommand(selectedElements, init.scene, init.importedModels));
+  init$1.commands.executeCommand(new DeleteCommand(selectedElements, init$1.scene, init$1.importedModels));
 }
 
 /**
@@ -112710,39 +112781,49 @@ document.getElementById("hide-button").onclick = function () {
 };
 
 function Hide() {
-  let selectedElements = [...init.SelectedObjects.selectedObjectsList];
-  if (!init.AllowHide || selectedElements.length > 0) {
-    init.AllowHide = true;
-  } else init.AllowHide = false;
+  let selectedElements = [...init$1.SelectedObjects.selectedObjectsList];
+  if (!init$1.AllowHide || selectedElements.length > 0) {
+    init$1.AllowHide = true;
+  } else init$1.AllowHide = false;
   // unselect all selected elements
-  init.unSelect();
-  Hide_ShowElementCommand.Apply(selectedElements, init.scene, init, init.AllowHide);
+  init$1.unSelect();
+  Hide_ShowElementCommand.Apply(selectedElements, init$1.scene, init$1, init$1.AllowHide);
 }
 
-document.getElementById("verticalSeparator");
 
-init.canvas.addEventListener('mousemove', onDocumentMouseMove, false);
 function onDocumentMouseMove(event) {
   event.preventDefault();
   mouse.x = (event.clientX / window.innerWidth); 
   mouse.y = (event.clientY / window.innerHeight); 
-  let newCamera = init.cameraList.find(c => c.isMouseOver(mouse.x, mouse.y) != null);
+  let newCamera = init$1.cameraList.find(c => c.isMouseOver(mouse.x, mouse.y) != null);
 
   if (newCamera != null)
   {
-    init.cameraList.forEach(c => c.controls.enabled = false);
+    init$1.cameraList.forEach(c => c.controls.enabled = false);
       newCamera.controls.enabled = true;
-      init.camera = newCamera;
-      init.rayCaster.camera = newCamera;
-      init.selection.camera = newCamera;
+      init$1.camera = newCamera;
+      init$1.rayCaster.camera = newCamera;
+      init$1.selection.camera = newCamera;
   }
 }
 
 document.getElementById("Split-Screen").onclick = function () {splitScreen();};
 function splitScreen()
 {
-  const newCamera = new AddNewCamera(init.sizes, init.scene, init.canvas, false, init.cameraList, true);
-  newCamera.execute();
+  init$1.canvas.addEventListener('mousemove', onDocumentMouseMove, false);
+  init$1.commands.executeCommand(new AddNewCamera(init$1.sizes, init$1.scene, init$1.canvas, false, init$1.cameraList, init$1, true));
+}
+
+document.getElementById("full-Screen").onclick = function () {fullScreen();};
+function fullScreen()
+{
+  if (init$1.cameraList.length > 1)
+  {
+    init$1.canvas.removeEventListener('mousemove', onDocumentMouseMove, false);
+    init$1.resetCamera();
+    const fullScreenCommand = new ShowSingleScreen(init$1);
+    fullScreenCommand.execute();
+  }
 }
 
 //#endregion
@@ -112753,9 +112834,9 @@ function splitScreen()
  */
 function stop(event) {
   if (event.key === "Escape") {
-    init.rayCaster.Disable();
-    init.selection.Enable();
-    init.rayCaster.pointsList = [];
+    init$1.rayCaster.Disable();
+    init$1.selection.Enable();
+    init$1.rayCaster.pointsList = [];
     dialog.close();
   }
 }

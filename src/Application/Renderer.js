@@ -11,7 +11,6 @@ export default class Renderer
         this.scene = scene
         this.application = application
         this.camera = camera
-        this.application.cameraList.forEach(c => { c.controls.enabled = false })
         this.setInstance()
     }
 
@@ -43,23 +42,24 @@ export default class Renderer
 
     update()
     {
-        if (this.application.cameraList.count == 1)
+        if (this.application.cameraList.cont == 1)
         {
+            this.instance.setScissorTest (false)
             this.instance.render(this.scene, this.camera.instance)
         }
         else {
             for (const camera of this.application.cameraList)
             {
                 let left = (camera.x * this.sizes.width)
-                let bottom = this.sizes.height - ((camera.heightRatio * this.sizes.height) + (camera.y * this.sizes.height));
-                let width = camera.widthRatio * this.sizes.width;
-                let height = camera.heightRatio * this.sizes.height;
-                this.instance.setViewport (left,bottom,width,height);
-                this.instance.setScissor(left,bottom,width,height);
-                this.instance.setScissorTest (true);
+                let bottom = this.sizes.height - ((camera.heightRatio * this.sizes.height) + (camera.y * this.sizes.height))
+                let width = camera.widthRatio * this.sizes.width
+                let height = camera.heightRatio * this.sizes.height
+                this.instance.setViewport (left,bottom,width,height)
+                this.instance.setScissor(left,bottom,width,height)
+                this.instance.setScissorTest (true)
                // camera.instance.aspect = width / height;
-                camera.instance.updateProjectionMatrix();
-                this.instance.render (this.scene, camera.instance);
+                camera.instance.updateProjectionMatrix()
+                this.instance.render (this.scene, camera.instance)
             }
         } 
     }

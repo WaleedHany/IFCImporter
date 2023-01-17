@@ -2,7 +2,7 @@
 # IFC Web Editor
 
 Simple IFC web editor, an experimental prof of concept,
-aiming to provide simple editing functionalities using IFC.js library, using THREE.js and IFC.js.
+aiming to provide simple editing functionalities using IFC.js library, using THREE.js and IFC.js and vanilla javascript
 This project is experimental and still in progress, and still open to adding more functionalities
 
 

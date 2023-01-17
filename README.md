@@ -15,6 +15,7 @@ This project is experimental and still in progress, and still open to adding mor
     - Rotating about Z-axis(through object's centroid)
     - Deleting an object
     - Hide objects and show hidden objects
+- Supports split screne modes
 - Multiple selection by mouse dragging, and by pressing Shift+click  
 - Supports gradient backgrounds
 - Allows defining IFC model's reference point position in space, and changing model's position (according to model's reference point) 

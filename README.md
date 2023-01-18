@@ -33,9 +33,9 @@ This project is experimental and still in progress, and still open to adding mor
 
 
 ## Demo
-- Video demo:__
- https://youtu.be/RvOgSgibfdw __
+- Video demo:<br />
+ https://youtu.be/RvOgSgibfdw <br />
  https://youtu.be/sUO-lejLZAU
-- Application demo:__
+- Application demo:<br />
  https://waleedhany.github.io/IFCImporter/src/index.html
 
